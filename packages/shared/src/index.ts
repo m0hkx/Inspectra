@@ -10,3 +10,4 @@
 export * from './api-error';
 export * from './health';
 export * from './inspections';
+export * from './work-orders';

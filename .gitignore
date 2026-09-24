@@ -130,6 +130,7 @@ sst/
 .terraform.lock.hcl
 terraform.tfstate*
 *.tfvars
+.claude/
 
 # --- Docker (keep Dockerfiles/docker-compose, ignore overrides & data) ---
 docker/docker-compose.override.yml
@@ -144,7 +145,7 @@ storage/
 *.sqlite
 *.sqlite-journal
 *.db
-CONTEXT.md
+context/
 
 # --- Git ---
 *.orig
