@@ -16,9 +16,9 @@ export function AssetForm({ id, initial, onDone }: { id?: string; initial?: Asse
   const [error, setError] = useState<string | null>(null);
   const set = (patch: Partial<AssetInput>) => setInput({ ...input, ...patch });
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (attempt(() => actions.saveAsset(input, id), setError)) onDone();
+    if (await attempt(() => actions.saveAsset(input, id), setError)) onDone();
   };
 
   return (

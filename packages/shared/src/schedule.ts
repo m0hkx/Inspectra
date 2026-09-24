@@ -1,4 +1,4 @@
-import type { Frequency } from './types';
+import type { Frequency } from './domain';
 
 interface WallClock {
   year: number;

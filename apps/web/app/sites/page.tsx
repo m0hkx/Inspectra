@@ -63,9 +63,9 @@ function SiteForm({ id, initial, onDone }: { id?: string; initial: SiteInput; on
   const [error, setError] = useState<string | null>(null);
   const [timezones] = useState(() => Intl.supportedValuesOf('timeZone'));
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (attempt(() => actions.saveSite(input, id), setError)) onDone();
+    if (await attempt(() => actions.saveSite(input, id), setError)) onDone();
   };
 
   return (

@@ -39,7 +39,7 @@ export default function MembersPage() {
                   <Select
                     className="w-auto"
                     value={role}
-                    onChange={(e) => attempt(() => actions.changeRole(user.id, e.target.value as Role), setError)}
+                    onChange={(e) => void attempt(() => actions.changeRole(user.id, e.target.value as Role), setError)}
                   >
                     {roleSchema.options.map((r) => (
                       <option key={r} value={r}>
@@ -65,9 +65,9 @@ function InviteForm() {
   const [role, setRole] = useState<Role>('TECHNICIAN');
   const [error, setError] = useState<string | null>(null);
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (attempt(() => actions.inviteMember(name.trim(), email.trim(), role), setError)) {
+    if (await attempt(() => actions.inviteMember(name.trim(), email.trim(), role), setError)) {
       setName('');
       setEmail('');
     }

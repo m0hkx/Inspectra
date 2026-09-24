@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { MagnifyingGlass, X } from '@phosphor-icons/react/dist/ssr';
 import { code } from '@/lib/format';
-import { can } from '@/lib/permissions';
+import { can } from '@inspectra/shared';
 import { useStore } from '@/lib/store';
 import { cx } from './ui';
 

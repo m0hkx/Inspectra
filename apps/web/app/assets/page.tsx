@@ -5,7 +5,7 @@ import { ASSET_STATUSES, AssetForm } from '@/components/asset-form';
 import { AssetStatusBadge } from '@/components/badges';
 import { Button, Card, EmptyState, PageHeader, Select, Sub, Table, Td, TextLink } from '@/components/ui';
 import { humanize } from '@/lib/format';
-import { can } from '@/lib/permissions';
+import { can } from '@inspectra/shared';
 import { useLookup, useStore } from '@/lib/store';
 import type { AssetStatus } from '@/lib/types';
 

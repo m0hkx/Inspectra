@@ -298,10 +298,10 @@ export function BackLink({ href, children }: { href: string; children: ReactNode
   );
 }
 
-/** Runs an action and turns a thrown error into a message for <ErrorNote>. */
-export function attempt(fn: () => void, setError: (message: string | null) => void): boolean {
+/** Runs an action and turns a thrown error into a message for <ErrorNote>. Resolves to whether it succeeded. */
+export async function attempt(fn: () => unknown, setError: (message: string | null) => void): Promise<boolean> {
   try {
-    fn();
+    await fn();
     setError(null);
     return true;
   } catch (error) {

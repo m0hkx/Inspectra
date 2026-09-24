@@ -6,7 +6,7 @@ import { AssetForm } from '@/components/asset-form';
 import { AssetStatusBadge, InspectionStatusBadge, IssueStatusBadge, SeverityBadge } from '@/components/badges';
 import { BackLink, Button, Card, CardHeader, EmptyState, RecordCode, Sub, Table, Td, TextLink } from '@/components/ui';
 import { code, formatDateTime, humanize } from '@/lib/format';
-import { can } from '@/lib/permissions';
+import { can } from '@inspectra/shared';
 import { useLookup, useStore } from '@/lib/store';
 
 export default function AssetPage() {

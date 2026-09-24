@@ -58,7 +58,8 @@ function initials(name: string): string {
 }
 
 function UserMenu() {
-  const { db, me, role, switchUser, resetDemo } = useStore();
+  const { me, role, demoUsers, switchUser } = useStore();
+  const organizations = [...new Set(demoUsers.map((u) => u.organizationName))];
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -96,49 +97,43 @@ function UserMenu() {
 
       {open && (
         <div role="menu" className="absolute right-0 z-40 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-900/10">
-          <p className="px-3 pt-2 pb-1 text-xs text-slate-500">Switch demo user</p>
-          {db.users.map((u) => {
-            const r = db.memberships.find((m) => m.userId === u.id)!.role;
-            const current = u.id === me.id;
-            return (
-              <button
-                key={u.id}
-                type="button"
-                role="menuitemradio"
-                aria-checked={current}
-                onClick={() => {
-                  switchUser(u.id);
-                  setOpen(false);
-                }}
-                className={cx(
-                  'flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-left',
-                  current ? 'bg-slate-100' : 'hover:bg-slate-50',
-                )}
-              >
-                <span className="grid size-8 place-items-center rounded-full bg-slate-200 text-[0.6875rem] font-bold">
-                  {initials(u.name)}
-                </span>
-                <span className="leading-tight">
-                  <span className="block text-sm font-semibold">{u.name}</span>
-                  <span className="block text-xs text-slate-500">{humanize(r)}</span>
-                </span>
-              </button>
-            );
-          })}
-          <div className="mt-2 border-t border-slate-100 px-3 pt-3 pb-2">
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                if (confirm('Reset all demo data to the starting state?')) resetDemo();
-                setOpen(false);
-              }}
-              className="cursor-pointer text-xs font-semibold text-slate-600 hover:text-slate-900"
-            >
-              Reset demo data
-            </button>
-            <p className="mt-0.5 text-xs text-slate-500">Demo data is saved in this browser.</p>
-          </div>
+          {organizations.map((organization) => (
+            <div key={organization} className="py-1">
+              <p className="px-3 pt-2 pb-1 text-xs text-slate-500">{organization}</p>
+              {demoUsers
+                .filter((u) => u.organizationName === organization)
+                .map((u) => {
+                  const current = u.id === me.id;
+                  return (
+                    <button
+                      key={u.id}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={current}
+                      onClick={() => {
+                        switchUser(u.id);
+                        setOpen(false);
+                      }}
+                      className={cx(
+                        'flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-left',
+                        current ? 'bg-slate-100' : 'hover:bg-slate-50',
+                      )}
+                    >
+                      <span className="grid size-8 place-items-center rounded-full bg-slate-200 text-[0.6875rem] font-bold">
+                        {initials(u.name)}
+                      </span>
+                      <span className="leading-tight">
+                        <span className="block text-sm font-semibold">{u.name}</span>
+                        <span className="block text-xs text-slate-500">{humanize(u.role)}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+            </div>
+          ))}
+          <p className="border-t border-slate-100 px-3 pt-3 pb-2 text-xs text-slate-500">
+            Demo sign-in. Each person sees only their own organization.
+          </p>
         </div>
       )}
     </div>

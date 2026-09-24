@@ -27,6 +27,7 @@ export default function InspectionPage() {
     (inspection?.responses ?? []).map(({ id, result, notes, severity }) => ({ id, result, notes, severity })),
   );
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   if (!inspection) {
     return (
@@ -50,9 +51,11 @@ export default function InspectionPage() {
   const update = (responseId: string, patch: Partial<ResponseInput>) =>
     setDraft((rows) => rows.map((r) => (r.id === responseId ? { ...r, ...patch } : r)));
 
-  const submit = () => {
+  const submit = async () => {
     if (failures > 0 && !confirm(`Submit with ${failures} failed item${failures === 1 ? '' : 's'}? Each one opens an issue.`)) return;
-    attempt(() => actions.submitInspection(inspection.id, draft), setError);
+    setSubmitting(true);
+    await attempt(() => actions.submitInspection(inspection.id, draft), setError);
+    setSubmitting(false);
   };
 
   return (
@@ -216,8 +219,8 @@ export default function InspectionPage() {
                 </p>
                 {failures > 0 && <p className="mt-1 text-danger">{failures} failed, each opens an issue</p>}
               </div>
-              <Button onClick={submit} disabled={answered < draft.length} className="px-6 py-3">
-                Submit inspection
+              <Button onClick={submit} disabled={answered < draft.length || submitting} className="px-6 py-3">
+                {submitting ? "Submitting…" : "Submit inspection"}
               </Button>
             </div>
           </div>

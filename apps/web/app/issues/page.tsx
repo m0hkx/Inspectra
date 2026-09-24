@@ -22,7 +22,7 @@ import {
   attempt,
 } from '@/components/ui';
 import { code, humanize, relativeTime } from '@/lib/format';
-import { can } from '@/lib/permissions';
+import { can } from '@inspectra/shared';
 import { useLookup, useStore } from '@/lib/store';
 import type { IssueStatus, Severity } from '@/lib/types';
 
@@ -160,11 +160,11 @@ function CreateWorkOrderForm({ issueId, onCancel }: { issueId: string; onCancel:
   const [dueDate, setDueDate] = useState(inDays(3));
   const [error, setError] = useState<string | null>(null);
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     let id = '';
-    const ok = attempt(() => {
-      id = actions.createWorkOrder(issueId, assigneeId, new Date(`${dueDate}T17:00:00`).toISOString());
+    const ok = await attempt(async () => {
+      id = await actions.createWorkOrder(issueId, assigneeId, new Date(`${dueDate}T17:00:00`).toISOString());
     }, setError);
     if (ok) router.push(`/work-orders/${id}`);
   };

@@ -1,15 +1,11 @@
-# Local infrastructure for Inspectra.
+# Inspectra: the whole stack in containers.
 #
-# Nothing in apps/ connects to these services yet — they are here so that
-# adding persistence to apps/api is a one-line datasource change:
+#   docker compose -f docker/docker-compose.yml up --build      # everything, then open http://localhost:3000
+#   docker compose -f docker/docker-compose.yml up -d postgres redis   # just the infrastructure, for `pnpm dev`
+#   docker compose -f docker/docker-compose.yml down             # stop (keeps data)
+#   docker compose -f docker/docker-compose.yml down -v          # stop and wipe the database
 #
-#   docker compose -f docker/docker-compose.yml up -d
-#   docker compose -f docker/docker-compose.yml down          # keep volumes
-#   docker compose -f docker/docker-compose.yml down -v       # wipe volumes
-#
-# Then point apps/api/.env at them, e.g.
-#   DATABASE_URL=postgresql://inspectra:inspectra@localhost:5432/inspectra
-#   REDIS_URL=redis://localhost:6379
+# From the repo root the same commands are available as `pnpm docker:up`, `pnpm docker:down`, `pnpm infra:up`.
 
 name: inspectra
 
@@ -24,12 +20,13 @@ services:
     ports:
       - '5432:5432'
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      # Postgres 18 images keep data in a versioned subfolder of /var/lib/postgresql.
+      - postgres-data:/var/lib/postgresql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U inspectra -d inspectra']
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   redis:
     image: redis:8-alpine
@@ -41,9 +38,44 @@ services:
       - redis-data:/data
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://inspectra:inspectra@postgres:5432/inspectra
+      REDIS_URL: redis://redis:6379
+      WEB_ORIGIN: http://localhost:3000
+      AUTH_MODE: demo
+      # Creates the demo organizations on first start; a no-op afterwards.
+      SEED_DEMO: 'true'
+    ports:
+      - '3001:3001'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        API_INTERNAL_URL: http://api:3001
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
   postgres-data:

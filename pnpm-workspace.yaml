@@ -12,6 +12,11 @@ packages:
 # Approve a new one with `pnpm approve-builds <package>`.
 allowBuilds:
   '@parcel/watcher': true
+  # Prisma downloads its schema (migration) engine on install.
+  '@prisma/engines': true
+  prisma: true
+  # Optional native speed-up for BullMQ's msgpack; the pure-JS fallback is fine.
+  msgpackr-extract: false
   unrs-resolver: true
 
 minimumReleaseAgeExclude:

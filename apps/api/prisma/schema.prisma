@@ -1,0 +1,284 @@
+// Inspectra data model. Every table except `users` and `organizations` carries
+// `organization_id`; the tenant-scoped client (src/infrastructure/prisma/tenant.ts)
+// injects it into every query so services never filter by hand.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  INSPECTOR
+  TECHNICIAN
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AssetStatus {
+  ACTIVE
+  OUT_OF_SERVICE
+  RETIRED
+}
+
+enum Frequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum InspectionStatus {
+  PENDING
+  SUBMITTED
+}
+
+enum ResponseResult {
+  PASS
+  FAIL
+  NA
+}
+
+enum IssueStatus {
+  OPEN
+  IN_WORK
+  RESOLVED
+}
+
+enum WorkOrderStatus {
+  OPEN
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  VERIFIED
+  CANCELLED
+}
+
+model Organization {
+  id   String @id @default(uuid()) @db.Uuid
+  name String
+
+  // Human-facing record numbers (INS-1041, ISS-302, WO-102) are per organization.
+  // Incrementing the row inside the creating transaction serializes allocation.
+  inspectionSeq Int @default(1000) @map("inspection_seq")
+  issueSeq      Int @default(300) @map("issue_seq")
+  workOrderSeq  Int @default(100) @map("work_order_seq")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  memberships Membership[]
+
+  @@map("organizations")
+}
+
+/// Mirrors the identity provider's user. Not tenant-scoped: one person can join several organizations.
+model User {
+  id         String   @id @default(uuid()) @db.Uuid
+  /// Identity provider id (Clerk) once real auth replaces demo logins.
+  externalId String?  @unique @map("external_id")
+  name       String
+  email      String   @unique
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  memberships Membership[]
+
+  @@map("users")
+}
+
+model Membership {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  role           Role
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@map("memberships")
+}
+
+model Site {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  name           String
+  address        String @default("")
+  /// IANA timezone; schedules are computed in it and stored as UTC.
+  timezone       String
+
+  assets Asset[]
+
+  @@index([organizationId])
+  @@map("sites")
+}
+
+model Asset {
+  id             String      @id @default(uuid()) @db.Uuid
+  organizationId String      @map("organization_id") @db.Uuid
+  siteId         String      @map("site_id") @db.Uuid
+  name           String
+  category       String
+  serial         String      @default("")
+  /// Free text ("Floor 2, Server Room"); the building/floor hierarchy is post-MVP.
+  location       String      @default("")
+  status         AssetStatus @default(ACTIVE)
+
+  site Site @relation(fields: [siteId], references: [id])
+
+  @@index([organizationId, siteId])
+  @@map("assets")
+}
+
+model InspectionTemplate {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String
+  description    String   @default("")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  items TemplateItem[]
+
+  @@index([organizationId])
+  @@map("inspection_templates")
+}
+
+model TemplateItem {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  templateId      String   @map("template_id") @db.Uuid
+  position        Int
+  prompt          String
+  defaultSeverity Severity @map("default_severity")
+
+  template InspectionTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId, position])
+  @@map("template_items")
+}
+
+model InspectionSchedule {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  templateId     String    @map("template_id") @db.Uuid
+  assetId        String    @map("asset_id") @db.Uuid
+  frequency      Frequency
+  /// "HH:mm" in the asset's site timezone.
+  timeOfDay      String    @map("time_of_day")
+  assigneeId     String    @map("assignee_id") @db.Uuid
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([organizationId, active])
+  @@map("inspection_schedules")
+}
+
+model Inspection {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  number         Int
+  scheduleId     String           @map("schedule_id") @db.Uuid
+  assetId        String           @map("asset_id") @db.Uuid
+  assigneeId     String           @map("assignee_id") @db.Uuid
+  /// Snapshot of the template name at generation time.
+  templateName   String           @map("template_name")
+  dueAt          DateTime         @map("due_at")
+  status         InspectionStatus @default(PENDING)
+  submittedAt    DateTime?        @map("submitted_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  responses InspectionResponse[]
+
+  /// Idempotency: running the generation job twice cannot create a second row.
+  @@unique([scheduleId, dueAt])
+  @@unique([organizationId, number])
+  @@index([organizationId, status, dueAt])
+  @@map("inspections")
+}
+
+model InspectionResponse {
+  id                 String          @id @default(uuid()) @db.Uuid
+  organizationId     String          @map("organization_id") @db.Uuid
+  inspectionId       String          @map("inspection_id") @db.Uuid
+  position           Int
+  /// Copied from the template item so later template edits never rewrite history.
+  itemPromptSnapshot String          @map("item_prompt_snapshot")
+  result             ResponseResult?
+  notes              String          @default("")
+  severity           Severity
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@index([inspectionId, position])
+  @@map("inspection_responses")
+}
+
+model Issue {
+  id                   String      @id @default(uuid()) @db.Uuid
+  organizationId       String      @map("organization_id") @db.Uuid
+  number               Int
+  /// Idempotency: a retried submit cannot open a second issue for the same failed item.
+  inspectionResponseId String      @unique @map("inspection_response_id") @db.Uuid
+  inspectionId         String      @map("inspection_id") @db.Uuid
+  assetId              String      @map("asset_id") @db.Uuid
+  title                String
+  notes                String      @default("")
+  severity             Severity
+  status               IssueStatus @default(OPEN)
+  createdAt            DateTime    @default(now()) @map("created_at")
+
+  workOrders WorkOrder[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@map("issues")
+}
+
+model WorkOrder {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @map("organization_id") @db.Uuid
+  number         Int
+  issueId        String          @map("issue_id") @db.Uuid
+  /// Assignment is a field, not a state.
+  assigneeId     String          @map("assignee_id") @db.Uuid
+  status         WorkOrderStatus @default(OPEN)
+  dueAt          DateTime        @map("due_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  issue Issue @relation(fields: [issueId], references: [id])
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@index([organizationId, assigneeId])
+  @@map("work_orders")
+}
+
+/// Written in the same transaction as the change it describes.
+model AuditEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  /// Null for system actions such as scheduled generation.
+  actorId        String?  @map("actor_id") @db.Uuid
+  entityType     String   @map("entity_type")
+  entityId       String   @map("entity_id")
+  action         String
+  message        String
+  before         Json?
+  after          Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, entityType, entityId])
+  @@map("audit_events")
+}

@@ -76,9 +76,9 @@ function TemplateEditor({ initial, onSaved }: { initial: TemplateInput; onSaved:
     change({ ...draft, items });
   };
 
-  const save = () => {
+  const save = async () => {
     let id = '';
-    if (attempt(() => (id = actions.saveTemplate(draft)), setError)) {
+    if (await attempt(async () => (id = await actions.saveTemplate(draft)), setError)) {
       setSaved(true);
       onSaved(id);
     }

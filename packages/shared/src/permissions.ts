@@ -1,4 +1,4 @@
-import type { Role } from './types';
+import type { Role } from './work-orders';
 
 export type Action =
   | 'manage:sites'
@@ -33,6 +33,8 @@ export function can(role: Role, action: Action): boolean {
 }
 
 export class ForbiddenError extends Error {
+  readonly code = 'FORBIDDEN';
+
   constructor(action: Action) {
     super(`You don't have permission to ${action.replace(':', ' ').replace('_', ' ')}.`);
     this.name = 'ForbiddenError';

@@ -1,0 +1,16 @@
+**/node_modules
+**/.next
+**/dist
+**/.turbo
+**/coverage
+**/*.tsbuildinfo
+apps/api/src/generated
+**/.env
+**/.env.*
+!**/.env.example
+.git
+.vscode
+.idea
+context
+CONTEXT.md
+docker/data

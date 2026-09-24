@@ -6,7 +6,7 @@ import { WorkOrderStatusBadge, workOrderLabel, workOrderTone } from '@/component
 import { Card, PageHeader, RecordCode, Sub, Swatch, Table, Td, TextLink, cx } from '@/components/ui';
 import { WorkOrderTag } from '@/components/work-order-tag';
 import { code, formatDate } from '@/lib/format';
-import { can } from '@/lib/permissions';
+import { can } from '@inspectra/shared';
 import { useLookup, useStore } from '@/lib/store';
 import { workOrderStatusSchema, type WorkOrderStatus } from '@inspectra/shared';
 

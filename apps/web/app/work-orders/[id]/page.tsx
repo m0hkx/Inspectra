@@ -8,7 +8,7 @@ import { ActivityTimeline } from '@/components/activity';
 import { IssueStatusBadge, SeverityBadge, WorkOrderStatusBadge } from '@/components/badges';
 import { BackLink, Button, Card, CardHeader, ErrorNote, RecordCode, Textarea, attempt } from '@/components/ui';
 import { code, formatDate, relativeTime } from '@/lib/format';
-import { can } from '@/lib/permissions';
+import { can } from '@inspectra/shared';
 import { useLookup, useStore } from '@/lib/store';
 
 export default function WorkOrderPage() {
@@ -17,6 +17,7 @@ export default function WorkOrderPage() {
   const lookup = useLookup();
   const [error, setError] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState(false);
+  const [pending, setPending] = useState(false);
   const [reason, setReason] = useState('');
 
   const wo = db.workOrders.find((w) => w.id === id);
@@ -44,12 +45,14 @@ export default function WorkOrderPage() {
       (e.entityType === 'issue' && e.entityId === issue.id),
   );
 
-  const run = (t: WorkOrderTransition) => {
+  const run = async (t: WorkOrderTransition) => {
     if (t.requiresReason && !rejecting) {
       setRejecting(true);
       return;
     }
-    const ok = attempt(() => actions.transitionWorkOrder(wo.id, t.to, reason), setError);
+    setPending(true);
+    const ok = await attempt(() => actions.transitionWorkOrder(wo.id, t.to, reason), setError);
+    setPending(false);
     if (ok) {
       setRejecting(false);
       setReason('');
@@ -133,7 +136,8 @@ export default function WorkOrderPage() {
                   <Button
                     key={`${t.from}-${t.to}`}
                     variant={t.to === 'CANCELLED' || t.requiresReason ? 'danger' : t.to === 'ON_HOLD' ? 'secondary' : 'primary'}
-                    onClick={() => run(t)}
+                    onClick={() => void run(t)}
+                    disabled={pending}
                     className="w-full py-2.5"
                   >
                     {t.label}
@@ -149,7 +153,7 @@ export default function WorkOrderPage() {
                 </label>
                 <Textarea id="reject-reason" rows={3} autoFocus value={reason} onChange={(e) => setReason(e.target.value)} />
                 <div className="flex gap-2">
-                  <Button variant="danger" onClick={() => run(transitions.find((t) => t.requiresReason)!)}>
+                  <Button variant="danger" disabled={pending} onClick={() => void run(transitions.find((t) => t.requiresReason)!)}>
                     Send back to technician
                   </Button>
                   <Button variant="ghost" onClick={() => setRejecting(false)}>

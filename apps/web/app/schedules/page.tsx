@@ -20,7 +20,7 @@ import {
   attempt,
 } from '@/components/ui';
 import { formatDateTime, humanize } from '@/lib/format';
-import { nextDueAt } from '@/lib/schedule';
+import { nextDueAt } from '@inspectra/shared';
 import { useLookup, useStore, type ScheduleInput } from '@/lib/store';
 import type { Frequency } from '@/lib/types';
 
@@ -37,9 +37,9 @@ export default function SchedulesPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const runJob = () => {
+  const runJob = async () => {
     let created = 0;
-    if (attempt(() => (created = actions.runGeneration()), setError)) {
+    if (await attempt(async () => (created = await actions.runGeneration()), setError)) {
       setMessage(
         created === 0
           ? 'No new inspections to create. Every active schedule already has its next inspection.'
@@ -102,7 +102,7 @@ export default function SchedulesPage() {
                     )}
                   </Td>
                   <Td className="text-right">
-                    <Button variant="ghost" onClick={() => attempt(() => actions.toggleSchedule(s.id), setError)}>
+                    <Button variant="ghost" onClick={() => void attempt(() => actions.toggleSchedule(s.id), setError)}>
                       {s.active ? 'Pause' : 'Resume'}
                     </Button>
                   </Td>
@@ -130,9 +130,9 @@ function ScheduleForm({ onDone }: { onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const set = (patch: Partial<ScheduleInput>) => setInput({ ...input, ...patch });
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (attempt(() => actions.createSchedule(input), setError)) onDone();
+    if (await attempt(() => actions.createSchedule(input), setError)) onDone();
   };
 
   return (

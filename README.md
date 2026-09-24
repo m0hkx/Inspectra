@@ -1,115 +1,151 @@
 # Inspectra
 
-Monorepo for the Inspectra platform: a **Next.js** web app and a **NestJS** API, sharing
-contracts through a workspace package. Managed with **pnpm workspaces** + **Turborepo**.
+Inspectra helps companies schedule equipment inspections, turn failed checks into tracked work
+orders, and prove what was fixed, by whom, and when.
+
+```text
+Schedule → Inspection generated → Inspector fails an item
+        → Issue created → Work order → Technician completes
+        → Inspector verifies → Everything recorded
+```
+
+A **Next.js** web app and a **NestJS** API over **PostgreSQL** (Prisma) and **Redis** (BullMQ),
+sharing contracts through a workspace package. Managed with **pnpm workspaces** + **Turborepo**.
 
 ```
 Inspectra/
 ├─ apps/
-│  ├─ api/                # NestJS 12 HTTP API            → http://localhost:3001/api
-│  └─ web/                # Next.js 16 App Router         → http://localhost:3000
+│  ├─ api/                # NestJS 12 API + Prisma + BullMQ   → http://localhost:3001/api
+│  └─ web/                # Next.js 16 App Router              → http://localhost:3000
 ├─ packages/
-│  └─ shared/             # @inspectra/shared — zod schemas + types used by both apps
-├─ docker/                # docker-compose for local infra (not wired up yet)
-├─ docs/                  # monorepo documentation
-├─ tests/                 # reserved for cross-app end-to-end tests
-├─ package.json           # workspace root — scripts only, no application code
-├─ pnpm-workspace.yaml    # workspace globs + pnpm settings
-├─ turbo.json             # task pipeline (build/dev/lint/typecheck/test)
-└─ tsconfig.base.json     # shared TypeScript options extended by every package
+│  └─ shared/             # @inspectra/shared: types, zod inputs, permissions, state machine, scheduling
+├─ docker/                # docker-compose: postgres, redis, api, web
+└─ docs/                  # monorepo documentation
 ```
 
-## Requirements
+## Run it with Docker (everything)
 
-| Tool    | Version   | Notes                                                          |
-| ------- | --------- | -------------------------------------------------------------- |
-| Node.js | >= 20.9.0 | Next 16 and Nest 12 both require it                            |
-| pnpm    | 12.x      | pinned via the root `packageManager` field (enable `corepack`) |
+Needs Docker Desktop (or any Docker Engine with Compose v2).
 
 ```bash
-corepack enable          # once, makes pnpm@12.5.1 the version this repo uses
-pnpm install             # installs every workspace package from the single lockfile
+pnpm docker:up          # = docker compose -f docker/docker-compose.yml up --build -d
 ```
 
-## Everyday commands
+Open **http://localhost:3000**. On first start the API applies migrations and seeds two demo
+organizations; later starts keep your data.
 
-Run these from the repository root — Turborepo figures out the correct order.
+| Command            | What it does                                         |
+| ------------------ | ---------------------------------------------------- |
+| `pnpm docker:up`   | Build images and start postgres, redis, api, web     |
+| `pnpm docker:logs` | Follow the API and web logs                          |
+| `pnpm docker:down` | Stop everything (data is kept in Docker volumes)     |
+| `docker compose -f docker/docker-compose.yml down -v` | Stop and **wipe** the database |
 
-| Command          | What it does                                                        |
-| ---------------- | ------------------------------------------------------------------- |
-| `pnpm dev`       | Runs the API, the web app **and** `@inspectra/shared` in watch mode |
-| `pnpm dev:api`   | Only the NestJS API (`nest start --watch`)                          |
-| `pnpm dev:web`   | Only the Next.js app (`next dev`)                                   |
-| `pnpm build`     | Builds every package, dependencies first (`^build`)                 |
-| `pnpm lint`      | ESLint for `apps/web`, oxlint for `apps/api`                        |
-| `pnpm typecheck` | `tsc --noEmit` for every package                                    |
-| `pnpm test`      | Jest unit tests (`apps/api`, `packages/shared`)                     |
-| `pnpm test:e2e`  | Supertest e2e suite against the real Nest app                       |
-| `pnpm format`    | Prettier across the repo                                            |
+No pnpm on the host? The plain `docker compose -f docker/docker-compose.yml up --build` works the same.
 
-Target one package with a filter: `pnpm turbo run build --filter=@inspectra/api`.
+### Demo logins
 
-## Endpoints
+Use the name menu in the top right to switch between the seeded people. Each one sees only their
+own organization:
 
-| Method | Path                   | Notes                                        |
-| ------ | ---------------------- | -------------------------------------------- |
-| GET    | `/api/health`          | Response typed by `healthResponseSchema`     |
-| GET    | `/api/inspections`     | In-memory list                               |
-| POST   | `/api/inspections`     | Body validated with `createInspectionSchema` |
-| GET    | `/api/inspections/:id` | `404` for unknown ids                        |
+| Person          | Role       | Organization         |
+| --------------- | ---------- | -------------------- |
+| Mohammad Khalid | Admin      | Northwind Facilities |
+| Sara Haddad     | Inspector  | Northwind Facilities |
+| Ahmed Nasser    | Technician | Northwind Facilities |
+| Lina Farouk     | Technician | Northwind Facilities |
+| Noor Salem      | Admin      | Harbor Labs          |
+
+Sign-in is a demo mechanism (`AUTH_MODE=demo`, the web app sends `x-user-id`). Clerk replaces the
+identity step later; memberships, roles and tenancy stay in our own tables.
+
+## Run it for development
+
+Requires Node.js ≥ 20.19 (24 recommended) and pnpm 12 (`corepack enable`).
 
 ```bash
-curl http://localhost:3001/api/health
-curl -X POST http://localhost:3001/api/inspections \
-  -H 'content-type: application/json' \
-  -d '{"name":"Homepage","target":"https://example.com"}'
+pnpm install                               # also generates the Prisma client
+cp apps/api/.env.example apps/api/.env
+pnpm infra:up                              # postgres + redis in Docker
+pnpm --filter @inspectra/api db:deploy     # apply migrations
+pnpm --filter @inspectra/api db:seed       # demo data (safe to re-run)
+pnpm dev                                   # api :3001 + web :3000 in watch mode
 ```
+
+| Command                                    | What it does                                         |
+| ------------------------------------------ | ---------------------------------------------------- |
+| `pnpm build` / `lint` / `typecheck`        | Every package, in dependency order                   |
+| `pnpm test`                                | Unit tests (shared rules, API)                       |
+| `pnpm test:e2e`                            | API integration tests against real Postgres (`inspectra_test`) |
+| `pnpm --filter @inspectra/api db:migrate`  | Create a migration after editing `prisma/schema.prisma` |
+| `pnpm --filter @inspectra/api db:reset`    | Drop, re-migrate and re-seed the dev database        |
+| `pnpm --filter @inspectra/api db:studio`   | Browse the database                                  |
+
+## API
+
+Every route except `/health` and `/auth/demo-users` needs `x-user-id`. Errors always look like
+`{ "error": { "code": "WORK_ORDER_INVALID_TRANSITION", "message": "...", "requestId": "req_..." } }`.
+
+| Method | Path                               | Who                     |
+| ------ | ---------------------------------- | ----------------------- |
+| GET    | `/api/health`                      | public                  |
+| GET    | `/api/auth/demo-users`             | public (demo mode only) |
+| GET    | `/api/me`                          | signed in               |
+| GET    | `/api/members` · POST · PATCH `/:userId` | read: all · write: admin |
+| GET    | `/api/sites` · POST · PATCH `/:id` | read: all · write: admin |
+| GET    | `/api/assets` · `/:id` · POST · PATCH `/:id` | read: all · write: admin |
+| GET    | `/api/templates` · POST · PUT `/:id` | read: all · write: admin |
+| GET    | `/api/schedules` · POST · PATCH `/:id` | read: all · write: admin |
+| POST   | `/api/schedules/generate`          | admin (same job the hourly worker runs) |
+| GET    | `/api/inspections` · `/:id`        | admin: all · inspector: assigned |
+| POST   | `/api/inspections/:id/submit`      | the assigned inspector  |
+| GET    | `/api/issues`                      | admin, inspector (technicians: their own) |
+| POST   | `/api/issues/:id/work-orders`      | admin                   |
+| GET    | `/api/work-orders` · `/:id`        | technicians see only theirs |
+| POST   | `/api/work-orders/:id/transitions` | decided by the transition table |
+| GET    | `/api/audit-events`                | scoped like work orders |
+
+## Engineering decisions
+
+- **Tenancy enforced in the data layer.** A Prisma client extension
+  (`apps/api/src/infrastructure/prisma/tenant.ts`) adds `organization_id` to every query on tenant
+  tables from the request context. Services never filter by hand; outside an organization context
+  it throws instead of returning everything.
+- **Idempotency through database constraints.** `UNIQUE (schedule_id, due_at)` makes running the
+  generation job twice harmless; `UNIQUE (inspection_response_id)` makes a retried submit unable to
+  open a second issue.
+- **Work order state machine with role-guarded transitions.** One table in
+  `packages/shared/src/work-orders.ts` drives both the API's checks and the buttons the web app shows.
+- **Template snapshots.** Inspections copy each prompt when generated; editing a template never
+  rewrites history.
+- **Timezone-aware scheduling.** "Monthly on the 1st at 09:00" is computed in the site's timezone
+  and stored as UTC; the hourly BullMQ job reaches each site's "today" in turn.
+- **Audit events in the same transaction** as the change they describe.
 
 ## How the apps share code
 
-`packages/shared` is the only runtime dependency between the two apps:
+`packages/shared` holds everything both sides must agree on: response types, zod request schemas
+(the API validates with them, the web app builds payloads against them), the role → permission map,
+the transition table and the schedule computation. `turbo.json` builds it before its consumers.
 
-1. `packages/shared/src/*.ts` defines zod schemas; `z.infer` derives the TypeScript types.
-2. Both apps declare `"@inspectra/shared": "workspace:*"`, so pnpm links the local package
-   instead of hitting the registry.
-3. The API validates request bodies with `ZodValidationPipe(createInspectionSchema)`, and the
-   web app validates the API response with the same schema — one change breaks both builds
-   rather than silently breaking production.
-
-Build order is handled for you: `turbo.json` declares `"dependsOn": ["^build"]`, so
-`@inspectra/shared` is always compiled (`tsc` → `dist/`) before its consumers run.
-
-## Environment files
-
-Each app owns its own env file; nothing is read from the repo root.
-
-```bash
-cp apps/api/.env.example apps/api/.env
-cp apps/web/.env.example apps/web/.env.local
-```
-
-- `apps/api` loads `.env` through `@nestjs/config` (see `apps/api/src/app.module.ts`).
-- `apps/web` reads `API_URL` in server components; use `NEXT_PUBLIC_API_URL` for browser code.
-- `CONTEXT.md` is intentionally gitignored and left as local scratch space.
+In the browser, the web app calls `/api/*` on its own origin; Next.js proxies to the API
+(`apps/web/next.config.ts`), so there is no CORS setup and no API URL in client code.
 
 ## Stack notes
 
 - **NestJS 12 ships ESM-only.** `apps/api` compiles to CommonJS and relies on Node's
-  `require(esm)` support, so the runtime needs Node ≥ 20.19 / 22.12 (24+ recommended), and Jest
-  is launched with `--experimental-vm-modules` — exactly how the official Nest 12 template does
-  it. Details in [docs/monorepo.md](docs/monorepo.md#nest-12-is-esm-only--why-the-api-scripts-look-unusual).
-- **TypeScript 6** is the version Nest's own CLI pins; both apps and the shared package use it.
-- **`next typegen`** is part of `apps/web`'s `typecheck` script, so Next's route types exist
-  before `tsc --noEmit` runs.
-- **pnpm 12 keeps its settings in `pnpm-workspace.yaml`**, not `.npmrc` — including the
-  `allowBuilds` map that approves dependency postinstall scripts.
+  `require(esm)` support, and Jest runs with `--experimental-vm-modules`. Details in
+  [docs/monorepo.md](docs/monorepo.md#nest-12-is-esm-only--why-the-api-scripts-look-unusual).
+- **Prisma 7** generates a CommonJS client into `apps/api/src/generated` (gitignored, recreated
+  on install/build) and connects through the `pg` driver adapter; CLI settings live in
+  `apps/api/prisma.config.ts`.
+- **pnpm 12 keeps its settings in `pnpm-workspace.yaml`**, including the `allowBuilds` map that
+  approves dependency install scripts (Prisma's engines).
+- `CONTEXT.md` is intentionally gitignored and left as local planning space.
 
 ## Next steps
 
-- Persist data: add Prisma/Drizzle to `apps/api` and start `docker/docker-compose.yml`.
-- Tests for the web app (Vitest + React Testing Library) — `apps/web` currently has none.
-- API documentation: `@nestjs/swagger` in `apps/api`.
-- CI (`.github/workflows/ci.yml`) running `pnpm install --frozen-lockfile && pnpm check`.
-- Multi-package version alignment via pnpm catalogs.
-
-More detail — including how to add a new app or package — in [docs/monorepo.md](docs/monorepo.md).
+- Clerk sign-in in place of demo logins (swap the identity step in `common/auth/auth.guard.ts`).
+- CI (`.github/workflows/ci.yml`): lint → typecheck → `prisma validate` → tests → build.
+- Web app tests, and Playwright E2E for the core loop.
+- Deploy: web on Vercel, API + worker on Railway/Render/Fly, Supabase Postgres, managed Redis.

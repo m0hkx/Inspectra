@@ -1,27 +1,31 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { createInspectionSchema } from '@inspectra/shared';
-import type { CreateInspectionInput, Inspection } from '@inspectra/shared';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { submitInspectionSchema, type Inspection } from '@inspectra/shared';
+import type { z } from 'zod';
+import { RequirePermission } from '../common/auth/decorators';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { InspectionsService } from './inspections.service';
 
 @Controller('inspections')
 export class InspectionsController {
-  constructor(private readonly inspectionsService: InspectionsService) {}
+  constructor(private readonly inspections: InspectionsService) {}
 
   @Get()
-  findAll(): Inspection[] {
-    return this.inspectionsService.findAll();
+  list(): Promise<Inspection[]> {
+    return this.inspections.list();
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string): Inspection {
-    return this.inspectionsService.findOne(id);
+  get(@Param('id', ParseUUIDPipe) id: string): Promise<Inspection> {
+    return this.inspections.get(id);
   }
 
-  @Post()
-  create(
-    @Body(new ZodValidationPipe(createInspectionSchema)) input: CreateInspectionInput,
-  ): Inspection {
-    return this.inspectionsService.create(input);
+  @Post(':id/submit')
+  @HttpCode(200)
+  @RequirePermission('perform:inspections')
+  submit(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(submitInspectionSchema)) input: z.output<typeof submitInspectionSchema>,
+  ): Promise<Inspection> {
+    return this.inspections.submit(id, input);
   }
 }
