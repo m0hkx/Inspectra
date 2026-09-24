@@ -1,0 +1,50 @@
+# Local infrastructure for Inspectra.
+#
+# Nothing in apps/ connects to these services yet — they are here so that
+# adding persistence to apps/api is a one-line datasource change:
+#
+#   docker compose -f docker/docker-compose.yml up -d
+#   docker compose -f docker/docker-compose.yml down          # keep volumes
+#   docker compose -f docker/docker-compose.yml down -v       # wipe volumes
+#
+# Then point apps/api/.env at them, e.g.
+#   DATABASE_URL=postgresql://inspectra:inspectra@localhost:5432/inspectra
+#   REDIS_URL=redis://localhost:6379
+
+name: inspectra
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: inspectra
+      POSTGRES_PASSWORD: inspectra
+      POSTGRES_DB: inspectra
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U inspectra -d inspectra']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
+  redis-data:

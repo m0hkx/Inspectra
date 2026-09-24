@@ -1,0 +1,29 @@
+{
+  "name": "inspectra",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Inspectra monorepo - Next.js web app + NestJS API, managed with pnpm workspaces and Turborepo",
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@12.5.1",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:web": "turbo run dev --filter=@inspectra/web",
+    "dev:api": "turbo run dev --filter=@inspectra/api",
+    "build": "turbo run build",
+    "build:web": "turbo run build --filter=@inspectra/web",
+    "build:api": "turbo run build --filter=@inspectra/api",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,cjs,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,cjs,json,md,yml,yaml}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.9.9",
+    "turbo": "^2.11.3"
+  }
+}

@@ -1,0 +1,21 @@
+# pnpm v10+ reads all package-manager *settings* from this file.
+# Only auth/registry settings belong in .npmrc.
+packages:
+  # Deployable applications
+  - 'apps/*'
+  # Shared libraries consumed by the applications
+  - 'packages/*'
+
+# Dependency postinstall scripts are blocked by default (supply-chain safety) and
+# pnpm 12 records the decision in this map. The two packages below ship native
+# bindings pulled in by Jest's haste map and by ESLint's import resolver.
+# Approve a new one with `pnpm approve-builds <package>`.
+allowBuilds:
+  '@parcel/watcher': true
+  unrs-resolver: true
+
+minimumReleaseAgeExclude:
+  - '@angular-devkit/core@22.2.0'
+  - '@angular-devkit/schematics-cli@22.2.0'
+  - '@angular-devkit/schematics@22.2.0'
+  - '@nestjs/cli@12.0.6'

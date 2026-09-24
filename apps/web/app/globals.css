@@ -1,0 +1,79 @@
+:root {
+  --background: #0b1020;
+  --surface: #151b2e;
+  --border: #26304a;
+  --foreground: #e8ecf7;
+  --muted: #9aa6c4;
+  --accent: #5ce0a8;
+  --warning: #ffb37a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.55;
+}
+
+code {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.9em;
+}
+
+.page {
+  margin: 0 auto;
+  max-width: 46rem;
+  padding: 4rem 1.5rem;
+}
+
+.lead {
+  color: var(--muted);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  margin-top: 2rem;
+  padding: 1.25rem 1.5rem;
+}
+
+.card--offline {
+  border-left-color: var(--warning);
+}
+
+.card h2 {
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.75rem;
+  text-transform: uppercase;
+}
+
+.card dl {
+  display: grid;
+  gap: 0.25rem 1rem;
+  grid-template-columns: max-content 1fr;
+  margin: 0;
+}
+
+.card dt {
+  color: var(--muted);
+}
+
+.card dd {
+  margin: 0;
+}
