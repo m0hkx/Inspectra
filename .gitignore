@@ -148,7 +148,7 @@ storage/
 *.sqlite
 *.sqlite-journal
 *.db
-context/
+/context/
 
 # --- Git ---
 *.orig
