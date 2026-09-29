@@ -289,7 +289,7 @@ export async function seedDemo(prisma: PrismaClient, now = new Date()): Promise<
   await prisma.$transaction(
     async (tx) => {
       await tx.organization.create({
-        data: { id: orgId, name: DEMO_ORG_NAME, inspectionSeq: 1045, issueSeq: 304, workOrderSeq: 103 },
+        data: { id: orgId, name: DEMO_ORG_NAME, isDemo: true, inspectionSeq: 1045, issueSeq: 304, workOrderSeq: 103 },
       });
       await tx.user.createMany({ data: users.map((u) => ({ id: id(`user_${u.key}`), name: u.name, email: u.email })) });
       await tx.membership.createMany({
@@ -345,7 +345,7 @@ export async function seedDemo(prisma: PrismaClient, now = new Date()): Promise<
       // A second, small organization: switch to its admin to see that nothing above is visible.
       const harborId = randomUUID();
       const noorId = randomUUID();
-      await tx.organization.create({ data: { id: harborId, name: 'Harbor Labs' } });
+      await tx.organization.create({ data: { id: harborId, name: 'Harbor Labs', isDemo: true } });
       await tx.user.create({ data: { id: noorId, name: 'Noor Salem', email: 'noor@harborlabs.test' } });
       await tx.membership.create({ data: { organizationId: harborId, userId: noorId, role: 'ADMIN' } });
       const harborSite = randomUUID();

@@ -1,29 +1,37 @@
 import { Injectable, type CanActivate, type ExecutionContext } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { requirePermission, type Action } from '@inspectra/shared';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { RequestContext } from '../context/request-context';
 import { AppError } from '../errors/app-error';
-import { IS_PUBLIC, REQUIRED_ACTIONS } from './decorators';
+import { ClerkService } from './clerk.service';
+import { IDENTITY_ONLY, IS_PUBLIC, REQUIRED_ACTIONS } from './decorators';
+import { IdentityService } from './identity.service';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+interface Identity {
+  userId: string;
+  /** Signed in with a one-click demo login rather than a Clerk session. */
+  demo: boolean;
+}
 
 /**
  * Resolves who is calling and which organization they act in, then checks the
  * route's required permissions.
  *
- * Identity is the only swappable part: in demo mode the caller names a seeded user
- * in `x-user-id`; with Clerk this becomes "verify the session token, look up the
- * user by `externalId`". Tenancy (membership → organization → role) stays ours.
+ * Identity comes from a Clerk session token (`Authorization: Bearer`) or, for the
+ * one-click demo, a seeded user id in `x-user-id`. With AUTH_MODE=demo only the
+ * latter exists. Tenancy (membership → organization → role) is always ours.
  */
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
+    private readonly clerk: ClerkService,
+    private readonly identity: IdentityService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -31,17 +39,28 @@ export class AuthGuard implements CanActivate {
     if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, targets)) return true;
 
     const request = context.switchToHttp().getRequest<Request>();
-    const userId = this.identify(request);
-
-    const requestedOrg = request.header('x-organization-id');
-    const membership = await this.prisma.unscoped.membership.findFirst({
-      where: { userId, ...(requestedOrg && UUID.test(requestedOrg) ? { organizationId: requestedOrg } : {}) },
-      orderBy: { createdAt: 'asc' },
-    });
-    if (!membership) throw new AppError(401, 'UNAUTHENTICATED', 'Sign in as a member of an organization.');
+    const { userId, demo } = await this.identify(request);
 
     const store = RequestContext.get();
     if (!store) throw new Error('Request context missing: is RequestIdMiddleware registered?');
+    store.userId = userId;
+    if (this.reflector.getAllAndOverride<boolean>(IDENTITY_ONLY, targets)) return true;
+
+    const requestedOrg = request.header('x-organization-id');
+    const membership = await this.prisma.unscoped.membership.findFirst({
+      where: {
+        userId,
+        ...(requestedOrg && UUID.test(requestedOrg) ? { organizationId: requestedOrg } : {}),
+        ...(demo && this.clerk.enabled ? { organization: { isDemo: true } } : {}),
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!membership) {
+      if (demo)
+        throw new AppError(401, 'UNAUTHENTICATED', 'Sign in as a member of an organization.');
+      throw new AppError(403, 'NO_ORGANIZATION', "You're not a member of an organization yet.");
+    }
+
     store.actor = { userId, organizationId: membership.organizationId, role: membership.role };
     store.organizationId = membership.organizationId;
 
@@ -50,15 +69,30 @@ export class AuthGuard implements CanActivate {
     return true;
   }
 
-  private identify(request: Request): string {
-    const mode = this.config.get<string>('AUTH_MODE') ?? 'demo';
-    if (mode !== 'demo') {
-      throw new AppError(401, 'UNAUTHENTICATED', `Auth mode "${mode}" is not configured on this server.`);
+  private async identify(request: Request): Promise<Identity> {
+    const token = request.header('authorization')?.match(/^Bearer (.+)$/i)?.[1];
+    if (token && this.clerk.enabled) {
+      return { userId: await this.identity.fromClerkToken(token), demo: false };
     }
-    const userId = request.header('x-user-id');
-    if (!userId || !UUID.test(userId)) {
-      throw new AppError(401, 'UNAUTHENTICATED', 'Choose a demo user to sign in.');
+
+    const demoUserId = request.header('x-user-id');
+    if (demoUserId) {
+      if (!UUID.test(demoUserId))
+        throw new AppError(401, 'UNAUTHENTICATED', 'Choose a demo user to sign in.');
+      if (this.clerk.enabled && !(await this.identity.isDemoUser(demoUserId))) {
+        throw new AppError(
+          401,
+          'UNAUTHENTICATED',
+          'Demo sign-in only works for people in the demo organizations.',
+        );
+      }
+      return { userId: demoUserId, demo: true };
     }
-    return userId;
+
+    throw new AppError(
+      401,
+      'UNAUTHENTICATED',
+      this.clerk.enabled ? 'Sign in to continue.' : 'Choose a demo user to sign in.',
+    );
   }
 }

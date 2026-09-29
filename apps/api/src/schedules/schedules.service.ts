@@ -62,4 +62,25 @@ export class SchedulesService {
       return toSchedule(row);
     });
   }
+
+  /** Inspections keep their `scheduleId` (there is no foreign key), so history is untouched. */
+  delete(id: string): Promise<void> {
+    return this.prisma.db.$transaction(async (tx) => {
+      const before = await tx.inspectionSchedule.findUnique({ where: { id } });
+      if (!before) throw AppError.notFound('Schedule');
+      const [template, asset] = await Promise.all([
+        tx.inspectionTemplate.findUnique({ where: { id: before.templateId }, select: { name: true } }),
+        tx.asset.findUnique({ where: { id: before.assetId }, select: { name: true } }),
+      ]);
+      // A concurrent delete makes this throw P2025, which the error filter turns into a 404.
+      await tx.inspectionSchedule.delete({ where: { id } });
+      await this.audit.record(tx, {
+        entityType: 'schedule',
+        entityId: id,
+        action: 'DELETED',
+        message: `deleted the ${template?.name ?? 'removed template'} schedule for ${asset?.name ?? 'a removed asset'}`,
+        before: toSchedule(before),
+      });
+    });
+  }
 }

@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   CardHeader,
+  ConfirmDialog,
   EmptyState,
   ErrorNote,
   Field,
@@ -20,7 +21,7 @@ import {
   attempt,
 } from '@/components/ui';
 import { formatDateTime, humanize } from '@/lib/format';
-import { nextDueAt } from '@inspectra/shared';
+import { nextDueAt, type Schedule } from '@inspectra/shared';
 import { useLookup, useStore, type ScheduleInput } from '@/lib/store';
 import type { Frequency } from '@/lib/types';
 
@@ -34,6 +35,7 @@ export default function SchedulesPage() {
   const { db, actions } = useStore();
   const lookup = useLookup();
   const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<Schedule | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -102,9 +104,14 @@ export default function SchedulesPage() {
                     )}
                   </Td>
                   <Td className="text-right">
-                    <Button variant="ghost" onClick={() => void attempt(() => actions.toggleSchedule(s.id), setError)}>
-                      {s.active ? 'Pause' : 'Resume'}
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      <Button variant="secondary" onClick={() => void attempt(() => actions.toggleSchedule(s.id), setError)}>
+                        {s.active ? 'Pause' : 'Resume'}
+                      </Button>
+                      <Button variant="danger" onClick={() => setDeleting(s)}>
+                        Delete
+                      </Button>
+                    </div>
                   </Td>
                 </tr>
               );
@@ -112,7 +119,65 @@ export default function SchedulesPage() {
           </Table>
         )}
       </Card>
+
+      {deleting && (
+        <DeleteScheduleDialog
+          schedule={deleting}
+          onDeleted={(text) => {
+            setError(null);
+            setMessage(text);
+          }}
+          onClose={() => setDeleting(null)}
+        />
+      )}
     </RequireRole>
+  );
+}
+
+function DeleteScheduleDialog({
+  schedule,
+  onDeleted,
+  onClose,
+}: {
+  schedule: Schedule;
+  onDeleted: (message: string) => void;
+  onClose: () => void;
+}) {
+  const { db, actions } = useStore();
+  const lookup = useLookup();
+  const template = lookup.template(schedule.templateId)?.name ?? 'Checklist';
+  const asset = lookup.asset(schedule.assetId)?.name ?? 'an asset';
+  const inspector = lookup.user(schedule.assigneeId)?.name ?? 'the inspector';
+  const pending = db.inspections.filter((i) => i.scheduleId === schedule.id && i.status === 'PENDING').length;
+
+  return (
+    <ConfirmDialog
+      title="Delete this schedule?"
+      confirmLabel="Delete schedule"
+      busyLabel="Deleting…"
+      onConfirm={async () => {
+        await actions.deleteSchedule(schedule.id);
+        onDeleted(`Deleted the ${template} schedule for ${asset}. It won't create any more inspections.`);
+      }}
+      onClose={onClose}
+    >
+      <div className="rounded-xl border border-slate-200 px-4 py-3">
+        <p className="font-medium text-slate-900">{template}</p>
+        <Sub>
+          {asset}, {humanize(schedule.frequency).toLowerCase()} at {schedule.timeOfDay}
+        </Sub>
+      </div>
+      <p>
+        It won&apos;t create any more inspections. The ones it already created stay in the records
+        {pending > 0 && (
+          <>
+            , including {pending} still to do on {inspector}&apos;s list
+          </>
+        )}
+        .
+      </p>
+      <p>This can&apos;t be undone. To stop it for a while instead, pause it.</p>
+    </ConfirmDialog>
   );
 }
 

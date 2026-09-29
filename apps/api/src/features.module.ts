@@ -3,6 +3,7 @@ import { AssetsController } from './assets/assets.controller';
 import { AssetsService } from './assets/assets.service';
 import { AuditController } from './audit/audit.controller';
 import { AuditService } from './audit/audit.service';
+import { AuthModule } from './common/auth/auth.module';
 import { InspectionsController } from './inspections/inspections.controller';
 import { InspectionsService } from './inspections/inspections.service';
 import { IssuesController } from './issues/issues.controller';
@@ -10,6 +11,8 @@ import { IssuesService } from './issues/issues.service';
 import { MeController } from './me/me.controller';
 import { MembersController } from './members/members.controller';
 import { MembersService } from './members/members.service';
+import { OrganizationsController } from './organizations/organizations.controller';
+import { OrganizationsService } from './organizations/organizations.service';
 import { GenerationService } from './schedules/generation.service';
 import { SchedulesController } from './schedules/schedules.controller';
 import { SchedulesService } from './schedules/schedules.service';
@@ -22,8 +25,10 @@ import { WorkOrdersService } from './work-orders/work-orders.service';
 
 /** The domain: one folder per resource, registered together. */
 @Module({
+  imports: [AuthModule],
   controllers: [
     MeController,
+    OrganizationsController,
     MembersController,
     SitesController,
     AssetsController,
@@ -37,6 +42,7 @@ import { WorkOrdersService } from './work-orders/work-orders.service';
   providers: [
     AuditService,
     MembersService,
+    OrganizationsService,
     SitesService,
     AssetsService,
     TemplatesService,

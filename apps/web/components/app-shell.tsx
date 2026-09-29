@@ -10,14 +10,16 @@ import {
   Cube,
   House,
   ListChecks,
+  SignOut as SignOutIcon,
   UsersThree,
   WarningCircle,
   Wrench,
 } from '@phosphor-icons/react/dist/ssr';
 import type { Icon } from '@phosphor-icons/react';
-import { humanize } from '@/lib/format';
+import { humanize, initials } from '@/lib/format';
 import { useStore } from '@/lib/store';
 import type { Role } from '@/lib/types';
+import { Logo } from './logo';
 import { SearchBox } from './search-box';
 import { Card, Tooltip, cx } from './ui';
 
@@ -33,32 +35,8 @@ const NAV: { href: string; label: string; icon: Icon; roles: Role[] }[] = [
   { href: '/settings/members', label: 'Members', icon: UsersThree, roles: ['ADMIN'] },
 ];
 
-function Logo() {
-  return (
-    <Link href="/dashboard" className="inline-flex items-center gap-2 text-[0.9375rem] font-bold tracking-tight">
-      <span className="grid size-8 place-items-center rounded-xl bg-slate-900">
-        <svg width="14" height="18" viewBox="0 0 14 18" aria-hidden>
-          <path d="M4 1h6l3 3v13H1V4z" fill="none" stroke="white" strokeWidth="1.6" strokeLinejoin="round" />
-          <circle cx="7" cy="4.5" r="1.3" fill="white" />
-          <path d="M4.2 10.5l1.9 1.9 3.7-4" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </span>
-      Inspectra
-    </Link>
-  );
-}
-
-function initials(name: string): string {
-  return name
-    .split(' ')
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
-}
-
 function UserMenu() {
-  const { me, role, demoUsers, switchUser } = useStore();
+  const { db, me, role, demoUsers, session, accounts, switchUser, signOut } = useStore();
   const organizations = [...new Set(demoUsers.map((u) => u.organizationName))];
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -97,7 +75,16 @@ function UserMenu() {
 
       {open && (
         <div role="menu" className="absolute right-0 z-40 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-900/10">
-          {organizations.map((organization) => (
+          {session === 'clerk' ? (
+            <div className="px-3 pt-2 pb-3">
+              <p className="text-sm font-semibold">{me.name}</p>
+              <p className="truncate text-xs text-slate-500">{me.email}</p>
+              <p className="mt-2 text-xs text-slate-500">
+                {humanize(role)} at <span className="font-semibold text-slate-700">{db.organization.name}</span>
+              </p>
+            </div>
+          ) : (
+            organizations.map((organization) => (
             <div key={organization} className="py-1">
               <p className="px-3 pt-2 pb-1 text-xs text-slate-500">{organization}</p>
               {demoUsers
@@ -130,10 +117,27 @@ function UserMenu() {
                   );
                 })}
             </div>
-          ))}
-          <p className="border-t border-slate-100 px-3 pt-3 pb-2 text-xs text-slate-500">
-            Demo sign-in. Each person sees only their own organization.
-          </p>
+            ))
+          )}
+          <div className="border-t border-slate-100 pt-1">
+            {session === 'demo' && (
+              <p className="px-3 pt-2 pb-2 text-xs text-slate-500">Demo sign-in. Each person sees only their own organization.</p>
+            )}
+            {accounts && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  signOut();
+                }}
+                className="flex w-full cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+              >
+                <SignOutIcon size={16} aria-hidden />
+                {session === 'clerk' ? 'Sign out' : 'Exit demo'}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -203,13 +207,13 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 /** Client-side mirror of the API's role guard, so users don't land on screens they can't use. */
 export function RequireRole({ roles, children }: { roles: Role[]; children: ReactNode }) {
-  const { role } = useStore();
+  const { role, session } = useStore();
   if (roles.includes(role)) return <>{children}</>;
   return (
     <Card className="p-8">
       <p className="text-xl font-light">This page is for {roles.map(humanize).join(' and ')} roles.</p>
       <p className="mt-1 text-sm text-slate-500">
-        Switch user from the menu at the top, or go back to the{' '}
+        {session === 'demo' ? 'Switch user from the menu at the top, or go back to the' : 'Go back to the'}{' '}
         <Link href="/dashboard" className="font-semibold text-slate-900 underline underline-offset-4">
           overview
         </Link>

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import { scheduleInputSchema, type Schedule } from '@inspectra/shared';
 import { z } from 'zod';
 import { RequirePermission } from '../common/auth/decorators';
@@ -42,5 +42,13 @@ export class SchedulesController {
   @RequirePermission('manage:schedules')
   async generate(): Promise<{ created: number }> {
     return { created: await this.generation.runForCurrentOrganization() };
+  }
+
+  /** Stops future inspections. The ones it already created stay, since they are records. */
+  @Delete(':id')
+  @HttpCode(204)
+  @RequirePermission('manage:schedules')
+  delete(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    return this.schedules.delete(id);
   }
 }

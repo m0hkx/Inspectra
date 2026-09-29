@@ -2,12 +2,16 @@
 
 import Link from 'next/link';
 import { CaretRight, SquaresFour } from '@phosphor-icons/react/dist/ssr';
-import type {
-  ButtonHTMLAttributes,
-  InputHTMLAttributes,
-  ReactNode,
-  SelectHTMLAttributes,
-  TextareaHTMLAttributes,
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
 } from 'react';
 import { useStore } from '@/lib/store';
 
@@ -295,6 +299,86 @@ export function BackLink({ href, children }: { href: string; children: ReactNode
     <Link href={href} className="text-sm text-slate-500 hover:text-slate-900 hover:underline hover:underline-offset-4">
       {children}
     </Link>
+  );
+}
+
+/**
+ * Asks before an action that can't be undone. Opens when rendered; the parent unmounts it via
+ * `onClose`. Built on <dialog>, so the browser traps focus, closes on Escape and dims the page.
+ * Focus starts on Cancel, the safe choice. While `onConfirm` runs the buttons are disabled, and
+ * if it throws the message shows inside the dialog instead of closing it.
+ */
+export function ConfirmDialog({
+  title,
+  children,
+  confirmLabel,
+  busyLabel = 'Working…',
+  cancelLabel = 'Cancel',
+  variant = 'danger',
+  onConfirm,
+  onClose,
+}: {
+  title: string;
+  children: ReactNode;
+  confirmLabel: string;
+  busyLabel?: string;
+  cancelLabel?: string;
+  /** `danger` for deletes; `primary` for a final step that destroys nothing, like submitting. */
+  variant?: 'danger' | 'primary';
+  onConfirm: () => Promise<unknown>;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const dialog = ref.current;
+    if (dialog && !dialog.open) dialog.showModal();
+  }, []);
+
+  const confirm = async () => {
+    setBusy(true);
+    if (await attempt(onConfirm, setError)) onClose();
+    else setBusy(false);
+  };
+
+  return (
+    <dialog
+      ref={ref}
+      aria-labelledby={titleId}
+      // Escape: stay open while the request is in flight, otherwise let the parent close us.
+      onCancel={(e) => {
+        e.preventDefault();
+        if (!busy) onClose();
+      }}
+      // Browsers may still force it shut (Chrome on a repeated Escape); keep the parent in sync.
+      onClose={onClose}
+      // A click on the dimmed backdrop lands on the <dialog> itself, not on the panel inside it.
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !busy) onClose();
+      }}
+      className="m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl bg-white p-0 text-slate-900 shadow-xl shadow-slate-900/10 backdrop:bg-slate-900/30"
+    >
+      <div className="p-6">
+        <h2 id={titleId} className="text-xl font-light tracking-tight">
+          {title}
+        </h2>
+        <div className="mt-3 space-y-3 text-sm text-slate-600">{children}</div>
+        <div className="mt-4 empty:hidden">
+          <ErrorNote message={error} />
+        </div>
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
+          <Button variant="secondary" disabled={busy} onClick={onClose}>
+            {cancelLabel}
+          </Button>
+          <Button variant={variant} disabled={busy} onClick={() => void confirm()}>
+            {busy ? busyLabel : confirmLabel}
+          </Button>
+        </div>
+      </div>
+    </dialog>
   );
 }
 

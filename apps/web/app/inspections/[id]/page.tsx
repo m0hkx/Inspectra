@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { InspectionStatusBadge, IssueStatusBadge, SeverityBadge } from '@/components/badges';
-import { BackLink, Button, Card, ErrorNote, RecordCode, Select, Textarea, attempt, cx } from '@/components/ui';
+import { BackLink, Button, Card, ConfirmDialog, ErrorNote, RecordCode, Select, Textarea, attempt, cx } from '@/components/ui';
 import { code, formatDateTime, humanize } from '@/lib/format';
 import { useLookup, useStore, type ResponseInput } from '@/lib/store';
 import type { ResponseResult, Severity } from '@/lib/types';
@@ -28,6 +28,7 @@ export default function InspectionPage() {
   );
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   if (!inspection) {
     return (
@@ -52,7 +53,11 @@ export default function InspectionPage() {
     setDraft((rows) => rows.map((r) => (r.id === responseId ? { ...r, ...patch } : r)));
 
   const submit = async () => {
-    if (failures > 0 && !confirm(`Submit with ${failures} failed item${failures === 1 ? '' : 's'}? Each one opens an issue.`)) return;
+    // Failed items open issues, so the inspector confirms them first.
+    if (failures > 0) {
+      setConfirming(true);
+      return;
+    }
     setSubmitting(true);
     await attempt(() => actions.submitInspection(inspection.id, draft), setError);
     setSubmitting(false);
@@ -225,6 +230,33 @@ export default function InspectionPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {confirming && (
+        <ConfirmDialog
+          title={`Submit with ${failures} failed item${failures === 1 ? '' : 's'}?`}
+          confirmLabel="Submit inspection"
+          busyLabel="Submitting…"
+          cancelLabel="Keep editing"
+          variant="primary"
+          onConfirm={() => actions.submitInspection(inspection.id, draft)}
+          onClose={() => setConfirming(false)}
+        >
+          <p>Each failed item opens an issue, so an admin can send a technician to fix it.</p>
+          <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+            {inspection.responses.map((response) => {
+              const current = draft.find((r) => r.id === response.id)!;
+              if (current.result !== 'FAIL') return null;
+              return (
+                <li key={response.id} className="flex items-start justify-between gap-3 px-4 py-3">
+                  <span className="font-medium text-slate-900">{response.itemPrompt}</span>
+                  <SeverityBadge severity={current.severity} />
+                </li>
+              );
+            })}
+          </ul>
+          <p>You can&apos;t change your answers after submitting.</p>
+        </ConfirmDialog>
       )}
     </div>
   );

@@ -13,18 +13,28 @@ export class ApiRequestError extends Error {
   }
 }
 
+/** Who is calling: a one-click demo user, or a Clerk session. */
+export type Credentials = { kind: 'demo'; userId: string } | { kind: 'clerk'; getToken: () => Promise<string | null> };
+
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PUT' | 'PATCH';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
-  /** Demo sign-in: which seeded user is acting. */
-  userId?: string | null;
+  credentials?: Credentials | null;
+}
+
+async function authHeaders(credentials?: Credentials | null): Promise<Record<string, string>> {
+  if (!credentials) return {};
+  if (credentials.kind === 'demo') return { 'x-user-id': credentials.userId };
+  const token = await credentials.getToken();
+  return token ? { authorization: `Bearer ${token}` } : {};
 }
 
 /**
  * Calls the Nest API through Next's `/api/*` rewrite (see next.config.ts), so the
  * browser only ever talks to its own origin.
  */
-export async function api<T>(path: string, { method = 'GET', body, userId }: RequestOptions = {}): Promise<T> {
+export async function api<T>(path: string, { method = 'GET', body, credentials }: RequestOptions = {}): Promise<T> {
+  const auth = await authHeaders(credentials);
   let response: Response;
   try {
     response = await fetch(`/api${path}`, {
@@ -32,7 +42,7 @@ export async function api<T>(path: string, { method = 'GET', body, userId }: Req
       cache: 'no-store',
       headers: {
         ...(body === undefined ? {} : { 'content-type': 'application/json' }),
-        ...(userId ? { 'x-user-id': userId } : {}),
+        ...auth,
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });

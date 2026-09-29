@@ -85,6 +85,10 @@ export const inviteMemberSchema = z.object({
 });
 export type InviteMemberInput = z.input<typeof inviteMemberSchema>;
 
+/** Onboarding: a signed-in person with no membership starts their own organization. */
+export const createOrganizationSchema = z.object({ name });
+export type CreateOrganizationInput = z.input<typeof createOrganizationSchema>;
+
 export const changeRoleSchema = z.object({ role: roleSchema });
 export type ChangeRoleInput = z.input<typeof changeRoleSchema>;
 

@@ -45,3 +45,12 @@ export function isDueToday(inspection: Inspection, now = new Date()): boolean {
 export function humanize(value: string): string {
   return value.charAt(0) + value.slice(1).toLowerCase().replaceAll('_', ' ');
 }
+
+export function initials(name: string): string {
+  return name
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}

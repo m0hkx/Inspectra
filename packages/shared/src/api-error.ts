@@ -3,6 +3,8 @@ import { z } from 'zod';
 export const errorCodeSchema = z.enum([
   'VALIDATION_FAILED',
   'UNAUTHENTICATED',
+  /** Signed in, but not a member of any organization yet: the web app offers to create one. */
+  'NO_ORGANIZATION',
   'FORBIDDEN',
   'NOT_FOUND',
   'CONFLICT',

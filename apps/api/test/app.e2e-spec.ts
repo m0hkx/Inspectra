@@ -21,7 +21,11 @@ describe('Inspectra API (integration)', () => {
 
   beforeAll(async () => {
     process.env.DATABASE_URL = TEST_DATABASE_URL;
-    delete process.env.REDIS_URL; // no queue in tests; generation is driven through the API
+    // No queue in tests; generation is driven through the API. Blank rather than deleted,
+    // because ConfigModule refills missing keys from apps/api/.env.
+    process.env.REDIS_URL = '';
+    // These tests sign in with x-user-id, even when the local .env says AUTH_MODE=clerk.
+    process.env.AUTH_MODE = 'demo';
 
     const { AppModule } = await import('../src/app.module.js');
     const { configureApp } = await import('../src/app.setup.js');

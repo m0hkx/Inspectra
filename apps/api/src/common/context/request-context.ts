@@ -9,6 +9,8 @@ export interface Actor {
 
 export interface RequestContextStore {
   requestId: string;
+  /** Signed-in user, set by the auth guard even before they belong to an organization. */
+  userId?: string;
   /** Set by the auth guard; absent for public routes. */
   actor?: Actor;
   /**
@@ -31,6 +33,13 @@ export const RequestContext = {
 
   requestId(): string {
     return storage.getStore()?.requestId ?? 'no-request';
+  },
+
+  /** The signed-in user. Unlike `actor()`, also works on `@IdentityOnly()` routes. */
+  userId(): string {
+    const id = storage.getStore()?.userId;
+    if (!id) throw new Error('No signed-in user in the current context.');
+    return id;
   },
 
   /** The signed-in actor. Only call from routes behind the auth guard. */

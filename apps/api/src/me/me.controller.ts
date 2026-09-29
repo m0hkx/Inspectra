@@ -1,9 +1,8 @@
 import { Controller, Get } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import type { Me, Role } from '@inspectra/shared';
+import { ClerkService } from '../common/auth/clerk.service';
 import { Public } from '../common/auth/decorators';
 import { RequestContext } from '../common/context/request-context';
-import { AppError } from '../common/errors/app-error';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 
 export interface DemoUser {
@@ -18,7 +17,7 @@ export interface DemoUser {
 export class MeController {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
+    private readonly clerk: ClerkService,
   ) {}
 
   @Get('me')
@@ -35,12 +34,17 @@ export class MeController {
     };
   }
 
-  /** The one-click demo logins. Only exists while AUTH_MODE=demo. */
+  /**
+   * The one-click demo logins. With Clerk on, only the seeded demo organizations
+   * (and never anyone who linked a real sign-in); in demo mode, everyone.
+   */
   @Public()
   @Get('auth/demo-users')
   async demoUsers(): Promise<DemoUser[]> {
-    if ((this.config.get<string>('AUTH_MODE') ?? 'demo') !== 'demo') throw AppError.notFound('Route');
     const memberships = await this.prisma.unscoped.membership.findMany({
+      where: this.clerk.enabled
+        ? { organization: { isDemo: true }, user: { externalId: null } }
+        : {},
       include: { user: true, organization: true },
       orderBy: [{ organization: { name: 'asc' } }, { createdAt: 'asc' }],
     });

@@ -1,5 +1,7 @@
 # Inspectra
 
+[![CI](https://github.com/m0hkx/Inspectra/actions/workflows/ci.yml/badge.svg)](https://github.com/m0hkx/Inspectra/actions/workflows/ci.yml)
+
 Inspectra helps companies schedule equipment inspections, turn failed checks into tracked work
 orders, and prove what was fixed, by whom, and when.
 
@@ -45,8 +47,8 @@ No pnpm on the host? The plain `docker compose -f docker/docker-compose.yml up -
 
 ### Demo logins
 
-Use the name menu in the top right to switch between the seeded people. Each one sees only their
-own organization:
+Pick a seeded person on the sign-in screen (or, without Clerk, from the name menu in the top right).
+Each one sees only their own organization:
 
 | Person          | Role       | Organization         |
 | --------------- | ---------- | -------------------- |
@@ -56,8 +58,33 @@ own organization:
 | Lina Farouk     | Technician | Northwind Facilities |
 | Noor Salem      | Admin      | Harbor Labs          |
 
-Sign-in is a demo mechanism (`AUTH_MODE=demo`, the web app sends `x-user-id`). Clerk replaces the
-identity step later; memberships, roles and tenancy stay in our own tables.
+### Sign-in: demo only, or Clerk accounts
+
+Clerk answers "who is this person"; memberships, roles and tenancy stay in our own tables.
+
+- **`AUTH_MODE=demo`** (default): no accounts. The web app sends the chosen person's id in
+  `x-user-id`.
+- **`AUTH_MODE=clerk`**: real accounts. The web app sends the Clerk session token as
+  `Authorization: Bearer`, and the API verifies it (`common/auth/clerk.service.ts`). The one-click
+  demo logins stay next to the sign-in form, but the API only honours them for members of the
+  seeded demo organizations (`organizations.is_demo`) who never linked a real account.
+
+On a Clerk user's first request the API links them to a `users` row
+(`common/auth/identity.service.ts`). If someone invited that **verified** email, they land in the
+inviting organization with the invited role. Otherwise they get a new user with no membership, and
+the web app asks them to create an organization (`POST /api/organizations`), which makes them its
+admin.
+
+To turn it on, create an application at [clerk.com](https://clerk.com) and copy its keys:
+
+| Where                 | Variable                            |
+| --------------------- | ----------------------------------- |
+| `apps/api/.env`       | `AUTH_MODE=clerk`, `CLERK_SECRET_KEY` |
+| `apps/web/.env.local` | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` |
+| `docker/.env` (Docker) | all three                          |
+
+The publishable key is compiled into the web app, so restart `pnpm dev` or rebuild the image after
+changing it. Without it the web app has no Clerk code path at all.
 
 ## Run it for development
 
@@ -83,19 +110,22 @@ pnpm dev                                   # api :3001 + web :3000 in watch mode
 
 ## API
 
-Every route except `/health` and `/auth/demo-users` needs `x-user-id`. Errors always look like
+Every route except `/health` and `/auth/demo-users` needs a signed-in caller: `x-user-id` for
+demo logins, or `Authorization: Bearer <Clerk session token>` with `AUTH_MODE=clerk`. A Clerk user
+with no organization gets `403 NO_ORGANIZATION`. Errors always look like
 `{ "error": { "code": "WORK_ORDER_INVALID_TRANSITION", "message": "...", "requestId": "req_..." } }`.
 
 | Method | Path                               | Who                     |
 | ------ | ---------------------------------- | ----------------------- |
 | GET    | `/api/health`                      | public                  |
-| GET    | `/api/auth/demo-users`             | public (demo mode only) |
+| GET    | `/api/auth/demo-users`             | public (with Clerk: demo organizations only) |
 | GET    | `/api/me`                          | signed in               |
+| POST   | `/api/organizations`               | signed in, no organization yet (onboarding) |
 | GET    | `/api/members` · POST · PATCH `/:userId` | read: all · write: admin |
 | GET    | `/api/sites` · POST · PATCH `/:id` | read: all · write: admin |
 | GET    | `/api/assets` · `/:id` · POST · PATCH `/:id` | read: all · write: admin |
 | GET    | `/api/templates` · POST · PUT `/:id` | read: all · write: admin |
-| GET    | `/api/schedules` · POST · PATCH `/:id` | read: all · write: admin |
+| GET    | `/api/schedules` · POST · PATCH `/:id` · DELETE `/:id` | read: all · write: admin |
 | POST   | `/api/schedules/generate`          | admin (same job the hourly worker runs) |
 | GET    | `/api/inspections` · `/:id`        | admin: all · inspector: assigned |
 | POST   | `/api/inspections/:id/submit`      | the assigned inspector  |
@@ -145,7 +175,6 @@ In the browser, the web app calls `/api/*` on its own origin; Next.js proxies to
 
 ## Next steps
 
-- Clerk sign-in in place of demo logins (swap the identity step in `common/auth/auth.guard.ts`).
-- CI (`.github/workflows/ci.yml`): lint → typecheck → `prisma validate` → tests → build.
+- Clerk webhooks (`user.updated`, `user.deleted`) to keep names/emails in sync after first sign-in.
 - Web app tests, and Playwright E2E for the core loop.
 - Deploy: web on Vercel, API + worker on Railway/Render/Fly, Supabase Postgres, managed Redis.

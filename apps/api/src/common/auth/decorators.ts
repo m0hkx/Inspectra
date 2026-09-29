@@ -12,3 +12,8 @@ export const Public = () => SetMetadata(IS_PUBLIC, true);
  * place (AuthGuard) instead of `if (role === 'ADMIN')` scattered through services.
  */
 export const RequirePermission = (...actions: Action[]) => SetMetadata(REQUIRED_ACTIONS, actions);
+
+export const IDENTITY_ONLY = 'inspectra:identity-only';
+
+/** Route needs a signed-in user but no organization yet (onboarding). */
+export const IdentityOnly = () => SetMetadata(IDENTITY_ONLY, true);
