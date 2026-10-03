@@ -28,9 +28,8 @@ export class GenerationScheduler implements OnApplicationBootstrap {
 
   async onApplicationBootstrap(): Promise<void> {
     // Upsert, so restarts and multiple instances keep exactly one hourly schedule.
-    // await this.queue.upsertJobScheduler('hourly-generation', { pattern: '0 * * * *' }, { name: 'generate' });
+    await this.queue.upsertJobScheduler('hourly-generation', { pattern: '0 * * * *' }, { name: 'generate' });
 
-    await this.queue.upsertJobScheduler('minute-generation', { pattern: '* * * * *' }, { name: 'generate' });
     // Also catch up once on boot, so a fresh deploy has today's inspections.
     await this.queue.add('generate', {});
     this.logger.log('Hourly inspection generation scheduled.');
