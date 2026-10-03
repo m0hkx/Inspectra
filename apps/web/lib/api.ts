@@ -13,8 +13,10 @@ export class ApiRequestError extends Error {
   }
 }
 
-/** Who is calling: a one-click demo user, or a Clerk session. */
-export type Credentials = { kind: 'demo'; userId: string } | { kind: 'clerk'; getToken: () => Promise<string | null> };
+/** Who is calling: a Clerk session. */
+export interface Credentials {
+  getToken: () => Promise<string | null>;
+}
 
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -23,9 +25,7 @@ interface RequestOptions {
 }
 
 async function authHeaders(credentials?: Credentials | null): Promise<Record<string, string>> {
-  if (!credentials) return {};
-  if (credentials.kind === 'demo') return { 'x-user-id': credentials.userId };
-  const token = await credentials.getToken();
+  const token = await credentials?.getToken();
   return token ? { authorization: `Bearer ${token}` } : {};
 }
 

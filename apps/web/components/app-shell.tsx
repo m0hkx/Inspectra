@@ -36,8 +36,7 @@ const NAV: { href: string; label: string; icon: Icon; roles: Role[] }[] = [
 ];
 
 function UserMenu() {
-  const { db, me, role, demoUsers, session, accounts, switchUser, signOut } = useStore();
-  const organizations = [...new Set(demoUsers.map((u) => u.organizationName))];
+  const { db, me, role, signOut } = useStore();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -75,68 +74,26 @@ function UserMenu() {
 
       {open && (
         <div role="menu" className="absolute right-0 z-40 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-900/10">
-          {session === 'clerk' ? (
-            <div className="px-3 pt-2 pb-3">
-              <p className="text-sm font-semibold">{me.name}</p>
-              <p className="truncate text-xs text-slate-500">{me.email}</p>
-              <p className="mt-2 text-xs text-slate-500">
-                {humanize(role)} at <span className="font-semibold text-slate-700">{db.organization.name}</span>
-              </p>
-            </div>
-          ) : (
-            organizations.map((organization) => (
-            <div key={organization} className="py-1">
-              <p className="px-3 pt-2 pb-1 text-xs text-slate-500">{organization}</p>
-              {demoUsers
-                .filter((u) => u.organizationName === organization)
-                .map((u) => {
-                  const current = u.id === me.id;
-                  return (
-                    <button
-                      key={u.id}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={current}
-                      onClick={() => {
-                        switchUser(u.id);
-                        setOpen(false);
-                      }}
-                      className={cx(
-                        'flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-left',
-                        current ? 'bg-slate-100' : 'hover:bg-slate-50',
-                      )}
-                    >
-                      <span className="grid size-8 place-items-center rounded-full bg-slate-200 text-[0.6875rem] font-bold">
-                        {initials(u.name)}
-                      </span>
-                      <span className="leading-tight">
-                        <span className="block text-sm font-semibold">{u.name}</span>
-                        <span className="block text-xs text-slate-500">{humanize(u.role)}</span>
-                      </span>
-                    </button>
-                  );
-                })}
-            </div>
-            ))
-          )}
+          <div className="px-3 pt-2 pb-3">
+            <p className="text-sm font-semibold">{me.name}</p>
+            <p className="truncate text-xs text-slate-500">{me.email}</p>
+            <p className="mt-2 text-xs text-slate-500">
+              {humanize(role)} at <span className="font-semibold text-slate-700">{db.organization.name}</span>
+            </p>
+          </div>
           <div className="border-t border-slate-100 pt-1">
-            {session === 'demo' && (
-              <p className="px-3 pt-2 pb-2 text-xs text-slate-500">Demo sign-in. Each person sees only their own organization.</p>
-            )}
-            {accounts && (
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setOpen(false);
-                  signOut();
-                }}
-                className="flex w-full cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900"
-              >
-                <SignOutIcon size={16} aria-hidden />
-                {session === 'clerk' ? 'Sign out' : 'Exit demo'}
-              </button>
-            )}
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                signOut();
+              }}
+              className="flex w-full cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+            >
+              <SignOutIcon size={16} aria-hidden />
+              Sign out
+            </button>
           </div>
         </div>
       )}
@@ -207,13 +164,13 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 /** Client-side mirror of the API's role guard, so users don't land on screens they can't use. */
 export function RequireRole({ roles, children }: { roles: Role[]; children: ReactNode }) {
-  const { role, session } = useStore();
+  const { role } = useStore();
   if (roles.includes(role)) return <>{children}</>;
   return (
     <Card className="p-8">
       <p className="text-xl font-light">This page is for {roles.map(humanize).join(' and ')} roles.</p>
       <p className="mt-1 text-sm text-slate-500">
-        {session === 'demo' ? 'Switch user from the menu at the top, or go back to the' : 'Go back to the'}{' '}
+        Go back to the{' '}
         <Link href="/dashboard" className="font-semibold text-slate-900 underline underline-offset-4">
           overview
         </Link>

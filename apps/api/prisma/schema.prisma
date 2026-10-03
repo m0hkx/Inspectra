@@ -66,8 +66,6 @@ enum WorkOrderStatus {
 model Organization {
   id   String @id @default(uuid()) @db.Uuid
   name String
-  /// Seeded sandbox. Its members can be signed in as with one click (no password), so it never holds real people.
-  isDemo Boolean @default(false) @map("is_demo")
 
   // Human-facing record numbers (INS-1041, ISS-302, WO-102) are per organization.
   // Incrementing the row inside the creating transaction serializes allocation.
@@ -85,7 +83,7 @@ model Organization {
 /// Mirrors the identity provider's user. Not tenant-scoped: one person can join several organizations.
 model User {
   id         String   @id @default(uuid()) @db.Uuid
-  /// Clerk user id. Null until the person first signs in with Clerk (invited or demo users).
+  /// Clerk user id. Null until an invited person first signs in with Clerk.
   externalId String?  @unique @map("external_id")
   name       String
   email      String   @unique

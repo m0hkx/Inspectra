@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { Manrope } from 'next/font/google';
 import type { ReactNode } from 'react';
 import { AppShell } from '@/components/app-shell';
+import { SignInNotConfigured } from '@/components/sign-in-screen';
 import { ClerkAuthBridge } from '@/lib/auth';
 import { clerkAppearance, clerkEnabled } from '@/lib/auth-config';
 import { StoreProvider } from '@/lib/store';
@@ -29,13 +30,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={manrope.variable}>
       <body className="font-sans antialiased">
-        {/* Without a publishable key there is no Clerk at all: demo logins only. */}
+        {/* Without a publishable key there is no Clerk at all, so nobody can sign in. */}
         {clerkEnabled ? (
           <ClerkProvider appearance={clerkAppearance}>
             <ClerkAuthBridge>{app}</ClerkAuthBridge>
           </ClerkProvider>
         ) : (
-          app
+          <SignInNotConfigured />
         )}
       </body>
     </html>

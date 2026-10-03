@@ -3,8 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import { createClerkClient, verifyToken, type ClerkClient } from '@clerk/backend';
 import { AppError } from '../errors/app-error';
 
-export type AuthMode = 'demo' | 'clerk';
-
 export interface ClerkProfile {
   name: string;
   /** Primary email, only when Clerk has verified it. */
@@ -18,32 +16,25 @@ export interface ClerkProfile {
  */
 @Injectable()
 export class ClerkService {
-  readonly mode: AuthMode;
-  private readonly secretKey?: string;
+  private readonly secretKey: string;
   private readonly jwtKey?: string;
   private readonly authorizedParties: string[];
   private client?: ClerkClient;
 
   constructor(config: ConfigService) {
-    const mode = config.get<string>('AUTH_MODE') ?? 'demo';
-    if (mode !== 'demo' && mode !== 'clerk')
-      throw new Error(`AUTH_MODE must be "demo" or "clerk", got "${mode}".`);
-    this.mode = mode;
-
-    this.secretKey = config.get<string>('CLERK_SECRET_KEY') || undefined;
+    const secretKey = config.get<string>('CLERK_SECRET_KEY');
+    if (!secretKey) throw new Error('CLERK_SECRET_KEY is not set: sign-in needs Clerk.');
+    // A publishable key here starts fine, then rejects every session token.
+    if (!secretKey.startsWith('sk_'))
+      throw new Error('CLERK_SECRET_KEY must be the secret key (sk_...), not the publishable key.');
+    this.secretKey = secretKey;
     this.jwtKey = config.get<string>('CLERK_JWT_KEY') || undefined;
-    if (mode === 'clerk' && !this.secretKey)
-      throw new Error('AUTH_MODE=clerk needs CLERK_SECRET_KEY.');
 
     // Tokens minted for any other site are rejected, even if Clerk signed them.
     this.authorizedParties = (config.get<string>('WEB_ORIGIN') ?? 'http://localhost:3000')
       .split(',')
       .map((origin) => origin.trim())
       .filter(Boolean);
-  }
-
-  get enabled(): boolean {
-    return this.mode === 'clerk';
   }
 
   /** Verifies a session token and returns the Clerk user id (`sub`). */

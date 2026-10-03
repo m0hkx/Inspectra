@@ -4,9 +4,9 @@
  */
 
 /**
- * Clerk is on when the web app is built with a publishable key (and the API runs
- * with AUTH_MODE=clerk). Without one, sign-in is the one-click demo only.
- * `NEXT_PUBLIC_*` is inlined at build time, so this is a constant everywhere.
+ * Sign-in needs the web app to be built with a Clerk publishable key; without one
+ * the app only explains how to configure it. `NEXT_PUBLIC_*` is inlined at build
+ * time, so this is a constant everywhere.
  */
 export const clerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
 

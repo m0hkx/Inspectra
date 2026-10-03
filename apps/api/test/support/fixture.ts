@@ -12,6 +12,9 @@ export type Fixture = Awaited<ReturnType<typeof buildFixture>>;
  * - Org B: a full chain (submitted inspection → issue in work → open work order) plus
  *   a second, still open issue. Org A must never see or touch any of it.
  * - `loner`: a user with no membership anywhere.
+ *
+ * Every user has already linked a Clerk account whose id is their own id, so
+ * `as(id)` signs in as them.
  */
 export async function buildFixture(prisma: PrismaClient) {
   const a = {
@@ -61,7 +64,7 @@ export async function buildFixture(prisma: PrismaClient) {
       { id: b.inspector, name: 'Ben Inspector', email: 'ben@b.test' },
       { id: b.tech, name: 'Bo Tech', email: 'bo@b.test' },
       { id: loner, name: 'Lou Loner', email: 'lou@nowhere.test' },
-    ],
+    ].map((user) => ({ ...user, externalId: user.id })),
   });
   // Explicit, increasing createdAt: list order and "first membership" are defined by it.
   const t0 = Date.now() - 60_000;

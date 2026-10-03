@@ -3,7 +3,7 @@ import { as, useTestApp } from './support/app';
 
 /**
  * The HTTP surface every route shares: prefix, request ids, the error body, CORS,
- * and who the caller is (demo sign-in plus organization selection).
+ * and which organization the caller acts in. Sign-in itself is in auth.e2e-spec.ts.
  */
 describe('HTTP surface (integration)', () => {
   const t = useTestApp();
@@ -104,7 +104,7 @@ describe('HTTP surface (integration)', () => {
         .options('/api/sites')
         .set('origin', 'http://localhost:3000')
         .set('access-control-request-method', 'POST')
-        .set('access-control-request-headers', 'content-type,x-user-id')
+        .set('access-control-request-headers', 'content-type,authorization')
         .expect(204);
       expect(res.headers['access-control-allow-origin']).toBe('http://localhost:3000');
       expect(res.headers['access-control-allow-credentials']).toBe('true');
@@ -113,41 +113,6 @@ describe('HTTP surface (integration)', () => {
     it('never reflects another origin', async () => {
       const res = await t.http().get('/api/health').set('origin', 'https://evil.example');
       expect(res.headers['access-control-allow-origin']).not.toBe('https://evil.example');
-    });
-  });
-
-  describe('demo sign-in', () => {
-    it.each([
-      ['no x-user-id header', {}],
-      ['a malformed user id', { 'x-user-id': 'admin' }],
-      ['an SQL-looking user id', { 'x-user-id': "' OR 1=1 --" }],
-      ['an unknown user id', { 'x-user-id': '00000000-0000-4000-8000-000000000000' }],
-    ])('rejects %s with 401 UNAUTHENTICATED', async (_label, headers) => {
-      const res = await t.http().get('/api/sites').set(headers).expect(401);
-      expect(apiErrorSchema.parse(res.body).error.code).toBe('UNAUTHENTICATED');
-    });
-
-    it('rejects a real user who belongs to no organization', async () => {
-      const res = await t.http().get('/api/sites').set(as(t.ids.loner)).expect(401);
-      expect(apiErrorSchema.parse(res.body).error.code).toBe('UNAUTHENTICATED');
-    });
-
-    it('lists the demo logins without signing in', async () => {
-      const res = await t.http().get('/api/auth/demo-users').expect(200);
-      expect(res.body).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ id: t.ids.a.admin, role: 'ADMIN', organizationName: 'Org A' }),
-        ]),
-      );
-    });
-
-    it('describes the caller on /api/me', async () => {
-      const res = await t.http().get('/api/me').set(as(t.ids.a.tech)).expect(200);
-      expect(res.body).toEqual({
-        user: { id: t.ids.a.tech, name: 'Tia Tech', email: 'tia@a.test' },
-        role: 'TECHNICIAN',
-        organization: { id: t.ids.a.org, name: 'Org A' },
-      });
     });
   });
 
@@ -177,8 +142,8 @@ describe('HTTP surface (integration)', () => {
     });
 
     it('refuses an organization the caller is not a member of', async () => {
-      const res = await t.http().get('/api/sites').set(as(t.ids.a.admin, t.ids.b.org)).expect(401);
-      expect(apiErrorSchema.parse(res.body).error.code).toBe('UNAUTHENTICATED');
+      const res = await t.http().get('/api/sites').set(as(t.ids.a.admin, t.ids.b.org)).expect(403);
+      expect(apiErrorSchema.parse(res.body).error.code).toBe('NO_ORGANIZATION');
     });
 
     it('ignores a malformed x-organization-id and falls back to the default', async () => {

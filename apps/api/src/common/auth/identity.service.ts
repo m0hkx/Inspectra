@@ -37,22 +37,6 @@ export class IdentityService {
   }
 
   /**
-   * Demo logins are one click with no password, so they may only act as seeded demo
-   * people: members of a demo organization who never linked a real sign-in.
-   */
-  async isDemoUser(userId: string): Promise<boolean> {
-    const user = await this.prisma.unscoped.user.findFirst({
-      where: {
-        id: userId,
-        externalId: null,
-        memberships: { some: { organization: { isDemo: true } } },
-      },
-      select: { id: true },
-    });
-    return user !== null;
-  }
-
-  /**
    * First sign-in. An invite already created a user with this email, so claim it
    * and the person lands in the organization that invited them. Otherwise create
    * the user; with no membership they are offered to start an organization.
@@ -80,10 +64,6 @@ export class IdentityService {
         );
       }
       await tx.user.update({ where: { id: invited.id }, data: { externalId: clerkUserId } });
-      // An invite from inside the public demo doesn't make a real person a demo member.
-      await tx.membership.deleteMany({
-        where: { userId: invited.id, organization: { isDemo: true } },
-      });
       return invited.id;
     });
   }

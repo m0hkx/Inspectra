@@ -24,16 +24,6 @@ import { api, ApiRequestError, type Credentials } from './api';
 import { useAuthSession } from './auth';
 import type { Db } from './types';
 
-const USER_KEY = 'inspectra-demo-user';
-
-export interface DemoUser {
-  id: string;
-  name: string;
-  email: string;
-  role: Role;
-  organizationName: string;
-}
-
 export type SiteInput = Omit<Site, 'id'>;
 export type AssetInput = Omit<Asset, 'id'>;
 export type TemplateInput = Omit<Template, 'id'> & { id?: string };
@@ -44,12 +34,6 @@ interface StoreValue {
   db: Db;
   me: User;
   role: Role;
-  demoUsers: DemoUser[];
-  /** How the current person signed in: a Clerk account or a one-click demo login. */
-  session: Credentials['kind'];
-  /** Clerk accounts exist on this deployment (otherwise sign-in is demo-only). */
-  accounts: boolean;
-  switchUser: (userId: string) => void;
   signOut: () => void;
   actions: {
     saveSite: (input: SiteInput, id?: string) => Promise<void>;
@@ -71,39 +55,13 @@ interface StoreValue {
 type State =
   | { status: 'loading' }
   | { status: 'error'; message: string }
-  /** Clerk is on and nobody is signed in: the sign-in screen, with demo logins beside it. */
-  | { status: 'signed-out'; demoUsers: DemoUser[] }
-  /** Signed in with Clerk but in no organization yet. */
-  | { status: 'onboarding'; demoUsers: DemoUser[] }
-  | { status: 'ready'; db: Db; me: Me; demoUsers: DemoUser[]; session: Credentials['kind'] };
+  /** Nobody is signed in: the sign-in screen. */
+  | { status: 'signed-out' }
+  /** Signed in but in no organization yet. */
+  | { status: 'onboarding' }
+  | { status: 'ready'; db: Db; me: Me };
 
 const StoreContext = createContext<StoreValue | null>(null);
-
-function readStoredUser(): string | null {
-  try {
-    return localStorage.getItem(USER_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function storeUser(userId: string | null): void {
-  try {
-    if (userId) localStorage.setItem(USER_KEY, userId);
-    else localStorage.removeItem(USER_KEY);
-  } catch {
-    // Private mode or blocked storage: the choice just won't survive a reload.
-  }
-}
-
-/** Default demo login: the first admin of the largest demo organization. */
-function defaultUser(users: DemoUser[]): string {
-  const sizes = new Map<string, number>();
-  for (const u of users) sizes.set(u.organizationName, (sizes.get(u.organizationName) ?? 0) + 1);
-  const largest = [...sizes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-  const admin = users.find((u) => u.organizationName === largest && u.role === 'ADMIN');
-  return (admin ?? users[0]).id;
-}
 
 async function loadDb(credentials: Credentials): Promise<{ db: Db; me: Me }> {
   const get = <T,>(path: string) => api<T>(path, { credentials });
@@ -143,8 +101,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const credentialsRef = useRef<Credentials | null>(null);
-  const demoUsersRef = useRef<DemoUser[]>([]);
-  // Drops responses that arrive after the user switched again.
+  // Drops responses that arrive after the user signed out.
   const loadToken = useRef(0);
   // Clerk's getToken changes identity between renders; reading it through a ref
   // keeps the credentials stable without reloading everything.
@@ -153,57 +110,40 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     authRef.current = auth;
   }, [auth]);
 
-  const load = useCallback(async (credentials: Credentials, demoUsers: DemoUser[]) => {
+  const load = useCallback(async (credentials: Credentials) => {
     const token = ++loadToken.current;
     const { db, me } = await loadDb(credentials);
     if (token !== loadToken.current) return;
     credentialsRef.current = credentials;
-    demoUsersRef.current = demoUsers;
-    setState({ status: 'ready', db, me, demoUsers, session: credentials.kind });
+    setState({ status: 'ready', db, me });
   }, []);
 
   useEffect(() => {
     if (!auth.loaded) return;
     let cancelled = false;
     (async () => {
+      if (!auth.signedIn) {
+        credentialsRef.current = null;
+        setState({ status: 'signed-out' });
+        return;
+      }
+      const credentials: Credentials = { getToken: () => authRef.current.getToken() };
       try {
-        const demoUsers = await api<DemoUser[]>('/auth/demo-users');
-        if (cancelled) return;
-
-        if (auth.signedIn) {
-          // A real account wins over a leftover demo choice.
-          storeUser(null);
-          const credentials: Credentials = { kind: 'clerk', getToken: () => authRef.current.getToken() };
-          try {
-            await load(credentials, demoUsers);
-          } catch (error) {
-            if (!(error instanceof ApiRequestError && error.code === 'NO_ORGANIZATION')) throw error;
-            if (cancelled) return;
-            credentialsRef.current = credentials;
-            demoUsersRef.current = demoUsers;
-            setState({ status: 'onboarding', demoUsers });
-          }
-          return;
-        }
-
-        demoUsersRef.current = demoUsers;
-        const stored = readStoredUser();
-        const storedUser = demoUsers.find((u) => u.id === stored);
-        if (auth.clerk) {
-          if (storedUser) await load({ kind: 'demo', userId: storedUser.id }, demoUsers);
-          else setState({ status: 'signed-out', demoUsers });
-          return;
-        }
-        if (demoUsers.length === 0) throw new Error('The database has no users yet. Seed it with `pnpm --filter @inspectra/api db:seed`.');
-        await load({ kind: 'demo', userId: storedUser?.id ?? defaultUser(demoUsers) }, demoUsers);
+        await load(credentials);
       } catch (error) {
-        if (!cancelled) setState({ status: 'error', message: error instanceof Error ? error.message : 'Could not load Inspectra.' });
+        if (cancelled) return;
+        if (error instanceof ApiRequestError && error.code === 'NO_ORGANIZATION') {
+          credentialsRef.current = credentials;
+          setState({ status: 'onboarding' });
+          return;
+        }
+        setState({ status: 'error', message: error instanceof Error ? error.message : 'Could not load Inspectra.' });
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [load, attempt, auth.loaded, auth.signedIn, auth.clerk]);
+  }, [load, attempt, auth.loaded, auth.signedIn]);
 
   /** Runs a write as the current user, then reloads so every page shows the server's truth. */
   const mutate = useCallback(
@@ -211,7 +151,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const credentials = credentialsRef.current;
       if (!credentials) throw new Error('Not signed in.');
       const result = await fn(credentials);
-      await load(credentials, demoUsersRef.current);
+      await load(credentials);
       return result;
     },
     [load],
@@ -262,24 +202,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [mutate, state]);
 
-  const switchUser = useCallback(
-    (userId: string) => {
-      storeUser(userId);
-      load({ kind: 'demo', userId }, demoUsersRef.current).catch((error: unknown) =>
-        setState({ status: 'error', message: error instanceof Error ? error.message : 'Could not switch user.' }),
-      );
-    },
-    [load],
-  );
-
   const signOut = useCallback(() => {
-    storeUser(null);
     credentialsRef.current = null;
     loadToken.current++;
     setState({ status: 'loading' });
-    // Clerk flips `signedIn`, which reruns the session effect; a demo login needs a nudge.
-    if (authRef.current.signedIn) void authRef.current.signOut();
-    else setAttempt((n) => n + 1);
+    // Clerk flips `signedIn`, which reruns the session effect.
+    void authRef.current.signOut();
   }, []);
 
   /** Onboarding: start an organization, then load it like any other sign-in. */
@@ -288,7 +216,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const credentials = credentialsRef.current;
       if (!credentials) throw new Error('Not signed in.');
       await api<Me>('/organizations', { method: 'POST', body: { name }, credentials });
-      await load(credentials, demoUsersRef.current);
+      await load(credentials);
     },
     [load],
   );
@@ -298,7 +226,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }
 
   if (state.status === 'signed-out') {
-    return <SignInScreen demoUsers={state.demoUsers} onDemo={switchUser} />;
+    return <SignInScreen />;
   }
 
   if (state.status === 'onboarding') {
@@ -332,10 +260,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         db: state.db,
         me: state.me.user,
         role: state.me.role,
-        demoUsers: state.demoUsers,
-        session: state.session,
-        accounts: auth.clerk,
-        switchUser,
         signOut,
         actions,
       }}

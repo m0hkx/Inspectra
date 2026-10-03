@@ -18,7 +18,7 @@ COPY apps/web apps/web
 # next.config.ts is read at build time: this is where the Next server proxies /api/*.
 ARG API_INTERNAL_URL=http://api:3001
 ENV API_INTERNAL_URL=$API_INTERNAL_URL
-# Inlined into the client bundle at build time. Empty = demo-only sign-in.
+# Inlined into the client bundle at build time. Required: without it nobody can sign in.
 ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
 ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
 RUN pnpm --filter @inspectra/shared build && pnpm --filter @inspectra/web build

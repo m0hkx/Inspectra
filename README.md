@@ -25,16 +25,40 @@ Inspectra/
 └─ docs/                  # monorepo documentation
 ```
 
+## Sign-in
+
+Inspectra signs people in with [Clerk](https://clerk.com). Clerk answers "who is this person";
+memberships, roles and tenancy stay in our own tables. The web app sends the Clerk session token as
+`Authorization: Bearer`, and the API verifies it (`common/auth/clerk.service.ts`).
+
+On a Clerk user's first request the API links them to a `users` row
+(`common/auth/identity.service.ts`). If someone invited that **verified** email, they land in the
+inviting organization with the invited role. Otherwise they get a new user with no membership, and
+the web app asks them to create an organization (`POST /api/organizations`), which makes them its
+admin.
+
+Create an application at [clerk.com](https://clerk.com) and copy its keys:
+
+| Where                  | Variable                            |
+| ---------------------- | ----------------------------------- |
+| `apps/api/.env`        | `CLERK_SECRET_KEY`                  |
+| `apps/web/.env.local`  | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` |
+| `docker/.env` (Docker) | both                                |
+
+The API refuses to start without `CLERK_SECRET_KEY`. The publishable key is compiled into the web
+app, so restart `pnpm dev` or rebuild the image after changing it.
+
 ## Run it with Docker (everything)
 
-Needs Docker Desktop (or any Docker Engine with Compose v2).
+Needs Docker Desktop (or any Docker Engine with Compose v2) and the Clerk keys in `docker/.env`
+(see [Sign-in](#sign-in)).
 
 ```bash
 pnpm docker:up          # = docker compose -f docker/docker-compose.yml up --build -d
 ```
 
-Open **http://localhost:3000**. On first start the API applies migrations and seeds two demo
-organizations; later starts keep your data.
+Open **http://localhost:3000**, sign up, and create your organization. On first start the API
+applies migrations; later starts keep your data.
 
 | Command            | What it does                                         |
 | ------------------ | ---------------------------------------------------- |
@@ -45,57 +69,16 @@ organizations; later starts keep your data.
 
 No pnpm on the host? The plain `docker compose -f docker/docker-compose.yml up --build` works the same.
 
-### Demo logins
-
-Pick a seeded person on the sign-in screen (or, without Clerk, from the name menu in the top right).
-Each one sees only their own organization:
-
-| Person          | Role       | Organization         |
-| --------------- | ---------- | -------------------- |
-| Mohammad Khalid | Admin      | Northwind Facilities |
-| Sara Haddad     | Inspector  | Northwind Facilities |
-| Ahmed Nasser    | Technician | Northwind Facilities |
-| Lina Farouk     | Technician | Northwind Facilities |
-| Noor Salem      | Admin      | Harbor Labs          |
-
-### Sign-in: demo only, or Clerk accounts
-
-Clerk answers "who is this person"; memberships, roles and tenancy stay in our own tables.
-
-- **`AUTH_MODE=demo`** (default): no accounts. The web app sends the chosen person's id in
-  `x-user-id`.
-- **`AUTH_MODE=clerk`**: real accounts. The web app sends the Clerk session token as
-  `Authorization: Bearer`, and the API verifies it (`common/auth/clerk.service.ts`). The one-click
-  demo logins stay next to the sign-in form, but the API only honours them for members of the
-  seeded demo organizations (`organizations.is_demo`) who never linked a real account.
-
-On a Clerk user's first request the API links them to a `users` row
-(`common/auth/identity.service.ts`). If someone invited that **verified** email, they land in the
-inviting organization with the invited role. Otherwise they get a new user with no membership, and
-the web app asks them to create an organization (`POST /api/organizations`), which makes them its
-admin.
-
-To turn it on, create an application at [clerk.com](https://clerk.com) and copy its keys:
-
-| Where                 | Variable                            |
-| --------------------- | ----------------------------------- |
-| `apps/api/.env`       | `AUTH_MODE=clerk`, `CLERK_SECRET_KEY` |
-| `apps/web/.env.local` | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` |
-| `docker/.env` (Docker) | all three                          |
-
-The publishable key is compiled into the web app, so restart `pnpm dev` or rebuild the image after
-changing it. Without it the web app has no Clerk code path at all.
-
 ## Run it for development
 
 Requires Node.js ≥ 20.19 (24 recommended) and pnpm 12 (`corepack enable`).
 
 ```bash
 pnpm install                               # also generates the Prisma client
-cp apps/api/.env.example apps/api/.env
+cp apps/api/.env.example apps/api/.env          # then set CLERK_SECRET_KEY
+cp apps/web/.env.example apps/web/.env.local    # then set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
 pnpm infra:up                              # postgres + redis in Docker
 pnpm --filter @inspectra/api db:deploy     # apply migrations
-pnpm --filter @inspectra/api db:seed       # demo data (safe to re-run)
 pnpm dev                                   # api :3001 + web :3000 in watch mode
 ```
 
@@ -105,20 +88,18 @@ pnpm dev                                   # api :3001 + web :3000 in watch mode
 | `pnpm test`                                | Unit tests (shared rules, API)                       |
 | `pnpm test:e2e`                            | API integration tests against real Postgres (`inspectra_test`) |
 | `pnpm --filter @inspectra/api db:migrate`  | Create a migration after editing `prisma/schema.prisma` |
-| `pnpm --filter @inspectra/api db:reset`    | Drop, re-migrate and re-seed the dev database        |
+| `pnpm --filter @inspectra/api db:reset`    | Drop and re-migrate the dev database                 |
 | `pnpm --filter @inspectra/api db:studio`   | Browse the database                                  |
 
 ## API
 
-Every route except `/health` and `/auth/demo-users` needs a signed-in caller: `x-user-id` for
-demo logins, or `Authorization: Bearer <Clerk session token>` with `AUTH_MODE=clerk`. A Clerk user
-with no organization gets `403 NO_ORGANIZATION`. Errors always look like
+Every route except `/health` needs a signed-in caller: `Authorization: Bearer <Clerk session token>`.
+A signed-in user with no organization gets `403 NO_ORGANIZATION`. Errors always look like
 `{ "error": { "code": "WORK_ORDER_INVALID_TRANSITION", "message": "...", "requestId": "req_..." } }`.
 
 | Method | Path                               | Who                     |
 | ------ | ---------------------------------- | ----------------------- |
 | GET    | `/api/health`                      | public                  |
-| GET    | `/api/auth/demo-users`             | public (with Clerk: demo organizations only) |
 | GET    | `/api/me`                          | signed in               |
 | POST   | `/api/organizations`               | signed in, no organization yet (onboarding) |
 | GET    | `/api/members` · POST · PATCH `/:userId` | read: all · write: admin |

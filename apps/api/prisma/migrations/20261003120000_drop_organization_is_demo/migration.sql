@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "organizations" DROP COLUMN "is_demo";

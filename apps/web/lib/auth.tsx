@@ -4,11 +4,9 @@ import { useAuth, useClerk, useUser } from '@clerk/nextjs';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 export interface AuthValue {
-  /** Real accounts exist; otherwise only demo logins. */
-  clerk: boolean;
-  /** Clerk has restored (or ruled out) a session. Always true without Clerk. */
+  /** Clerk has restored (or ruled out) a session, or failed to load. */
   loaded: boolean;
-  /** Clerk couldn't load (offline, blocked script): only demo logins work. */
+  /** Clerk couldn't load (offline, blocked script): nobody can sign in. */
   unavailable: boolean;
   /** Signed in with a Clerk account. */
   signedIn: boolean;
@@ -18,17 +16,7 @@ export interface AuthValue {
   signOut: () => Promise<void>;
 }
 
-const DEMO_ONLY: AuthValue = {
-  clerk: false,
-  loaded: true,
-  unavailable: false,
-  signedIn: false,
-  email: null,
-  getToken: async () => null,
-  signOut: async () => {},
-};
-
-const AuthContext = createContext<AuthValue>(DEMO_ONLY);
+const AuthContext = createContext<AuthValue | null>(null);
 
 /** Rendered inside `<ClerkProvider>`: turns Clerk's hooks into the app's small auth surface. */
 export function ClerkAuthBridge({ children }: { children: ReactNode }) {
@@ -37,7 +25,7 @@ export function ClerkAuthBridge({ children }: { children: ReactNode }) {
   const { user } = useUser();
   const email = user?.primaryEmailAddress?.emailAddress ?? null;
 
-  // If Clerk never loads, `isLoaded` stays false forever; stop waiting so the demo still works.
+  // If Clerk never loads, `isLoaded` stays false forever; stop waiting so the sign-in screen can say so.
   const [unavailable, setUnavailable] = useState(false);
   useEffect(() => {
     const onStatus = (status: string) => setUnavailable(status === 'error');
@@ -47,7 +35,6 @@ export function ClerkAuthBridge({ children }: { children: ReactNode }) {
 
   const value = useMemo<AuthValue>(
     () => ({
-      clerk: true,
       loaded: isLoaded || unavailable,
       unavailable,
       signedIn: Boolean(isSignedIn),
@@ -61,5 +48,7 @@ export function ClerkAuthBridge({ children }: { children: ReactNode }) {
 }
 
 export function useAuthSession(): AuthValue {
-  return useContext(AuthContext);
+  const value = useContext(AuthContext);
+  if (!value) throw new Error('useAuthSession must be used inside <ClerkAuthBridge>');
+  return value;
 }

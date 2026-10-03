@@ -139,8 +139,6 @@ const ROUTES: Route[] = [
   { route: 'GET /api/audit-events', url: () => '/api/audit-events', allowed: ALL },
 ];
 
-const PUBLIC_ROUTES = ['GET /api/auth/demo-users'];
-
 /** Onboarding routes without an organization; covered by auth.e2e-spec.ts. */
 const COVERED_ELSEWHERE = new Set(['OrganizationsController']);
 
@@ -153,7 +151,7 @@ describe('Authorization matrix (integration)', () => {
     return r.body ? req.send(r.body(t.ids)) : req;
   };
 
-  it('lists every route of the domain controllers', () => {
+  it('lists every route of the domain controllers, none of them public', () => {
     const controllers = (
       Reflect.getMetadata(MODULE_METADATA.CONTROLLERS, FeaturesModule) as Function[]
     ).filter((c) => !COVERED_ELSEWHERE.has(c.name));
@@ -176,7 +174,7 @@ describe('Authorization matrix (integration)', () => {
       }
     }
     expect(registered.sort()).toEqual(ROUTES.map((r) => r.route).sort());
-    expect(publicRoutes.sort()).toEqual(PUBLIC_ROUTES);
+    expect(publicRoutes).toEqual([]);
   });
 
   it('refuses every non-public route without a signed-in user', async () => {
@@ -211,10 +209,4 @@ describe('Authorization matrix (integration)', () => {
       expect(wrong).toEqual([]);
     },
   );
-
-  it('keeps the public routes open', async () => {
-    for (const route of PUBLIC_ROUTES) {
-      await t.http().get(route.split(' ')[1]!).expect(200);
-    }
-  });
 });

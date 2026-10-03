@@ -1,5 +1,6 @@
 import type { Member } from '@inspectra/shared';
 import { as, useTestApp } from './support/app';
+import { bearer } from './support/clerk';
 
 /** Inviting people and changing their roles. */
 describe('Members (integration)', () => {
@@ -44,7 +45,9 @@ describe('Members (integration)', () => {
         message: 'invited Nia New as TECHNICIAN',
       });
       // The new member can sign in right away.
-      await t.http().get('/api/me').set(as(res.body.id)).expect(200);
+      t.clerk.profiles.set('user_nia', { name: 'Nia', verifiedEmail: 'nia@a.test' });
+      const me = await t.http().get('/api/me').set(bearer('user_nia')).expect(200);
+      expect(me.body).toMatchObject({ user: { id: res.body.id }, role: 'TECHNICIAN' });
     });
 
     it('reuses the user record of someone already in another organization', async () => {

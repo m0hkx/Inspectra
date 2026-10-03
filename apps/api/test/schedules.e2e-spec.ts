@@ -182,6 +182,29 @@ describe('Schedules and generation (integration)', () => {
       ]);
     });
 
+    it('keeps the snapshot when the template is edited later', async () => {
+      const inspection = await flow.pendingInspection();
+      await t
+        .http()
+        .put(`/api/templates/${t.ids.a.template}`)
+        .set(as(t.ids.a.admin))
+        .send({
+          name: 'Renamed',
+          description: '',
+          items: [{ prompt: 'Something new', defaultSeverity: 'LOW' }],
+        })
+        .expect(200);
+      const res = await t
+        .http()
+        .get(`/api/inspections/${inspection.id}`)
+        .set(as(t.ids.a.inspector))
+        .expect(200);
+      expect((res.body as Inspection).responses.map((r) => r.itemPrompt)).toEqual([
+        'Brakes hold',
+        'Horn works',
+      ]);
+    });
+
     it('records generation as a system action (no actor)', async () => {
       await flow.generate();
       const event = await t.prisma.auditEvent.findFirstOrThrow({ where: { action: 'GENERATED' } });

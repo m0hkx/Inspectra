@@ -53,11 +53,8 @@ services:
       DATABASE_URL: postgresql://inspectra:inspectra@postgres:5432/inspectra
       REDIS_URL: redis://redis:6379
       WEB_ORIGIN: http://localhost:3000
-      # Clerk accounts: set these (and the web build arg below) in docker/.env.
-      AUTH_MODE: ${AUTH_MODE:-demo}
+      # Sign-in needs Clerk: set this (and the web build arg below) in docker/.env.
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-}
-      # Creates the demo organizations on first start; a no-op afterwards.
-      SEED_DEMO: 'true'
     ports:
       - '3001:3001'
     depends_on:
