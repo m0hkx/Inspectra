@@ -21,7 +21,7 @@ applications:
             # node_modules, not a link into pnpm's store. Hoisting is switched on here only (pnpm 12
             # reads it from pnpm-workspace.yaml and ignores .npmrc); the Docker images keep the
             # default layout.
-            - echo "nodeLinker: hoisted" >> pnpm-workspace.yaml
+            - 'echo "nodeLinker: hoisted" >> pnpm-workspace.yaml'
             # Only the web app and the packages it depends on (skips the API's Prisma setup).
             - pnpm install --frozen-lockfile --filter @inspectra/web...
         build:
