@@ -1,0 +1,86 @@
+# Inspectra API in production: one server running the API, Postgres, Redis and Caddy (HTTPS).
+# The web app is hosted separately (Amplify) and proxies /api/* to API_DOMAIN.
+#
+#   docker compose -f docker/docker-compose.prod.yml up -d --build   # build and start / update
+#   docker compose -f docker/docker-compose.prod.yml logs -f api     # follow the API logs
+#
+# Settings and secrets come from docker/.env (gitignored): API_DOMAIN, WEB_ORIGIN,
+# CLERK_SECRET_KEY and POSTGRES_PASSWORD. Only Caddy publishes ports; the database and
+# Redis are reachable from inside this compose network only.
+
+name: inspectra
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: inspectra
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in docker/.env}
+      POSTGRES_DB: inspectra
+    # Sized for a small (1-2 GB) server.
+    command: ['postgres', '-c', 'shared_buffers=64MB', '-c', 'max_connections=40']
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U inspectra -d inspectra']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    # BullMQ requires noeviction: an evicted job key would silently drop the hourly job.
+    command: ['redis-server', '--appendonly', 'yes', '--maxmemory', '64mb', '--maxmemory-policy', 'noeviction']
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      # POSTGRES_PASSWORD goes into a URL: keep it to letters and digits (openssl rand -hex 24).
+      DATABASE_URL: postgresql://inspectra:${POSTGRES_PASSWORD}@postgres:5432/inspectra
+      REDIS_URL: redis://redis:6379
+      WEB_ORIGIN: ${WEB_ORIGIN:?set WEB_ORIGIN in docker/.env}
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:?set CLERK_SECRET_KEY in docker/.env}
+      CLERK_JWT_KEY: ${CLERK_JWT_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?set API_DOMAIN in docker/.env}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates live here; losing them means re-issuing from Let's Encrypt.
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  redis-data:
+  caddy-data:
+  caddy-config:

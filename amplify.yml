@@ -1,0 +1,30 @@
+# AWS Amplify Hosting build for the web app (apps/web). The API is deployed separately;
+# see docker/docker-compose.prod.yml.
+#
+# Amplify environment variables (both read at build time, so redeploy after changing them):
+#   API_INTERNAL_URL                   https address of the API, e.g. https://api.example.com
+#   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY  Clerk publishable key (pk_...)
+#   AMPLIFY_MONOREPO_APP_ROOT          apps/web (set by Amplify when the app is marked as a monorepo)
+version: 1
+applications:
+  - appRoot: apps/web
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - nvm install 24 && nvm use 24
+            # pnpm version comes from `packageManager` in the root package.json.
+            - corepack enable
+            # Only the web app and the packages it depends on (skips the API's Prisma setup).
+            - pnpm install --frozen-lockfile --filter @inspectra/web...
+        build:
+          commands:
+            - pnpm --filter @inspectra/shared build
+            - pnpm --filter @inspectra/web build
+      artifacts:
+        baseDirectory: .next
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - .next/cache/**/*
