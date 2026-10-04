@@ -9,27 +9,29 @@ version: 1
 applications:
   - appRoot: apps/web
     frontend:
+      # Build from the repository root; baseDirectory below is relative to it.
+      buildPath: /
       phases:
         preBuild:
           commands:
             - nvm install 24 && nvm use 24
             # pnpm version comes from `packageManager` in the root package.json.
             - corepack enable
+            # Amplify can only package the standalone output when `next` is a real folder in
+            # node_modules, not a link into pnpm's store. Hoisting is switched on here only (pnpm 12
+            # reads it from pnpm-workspace.yaml and ignores .npmrc); the Docker images keep the
+            # default layout.
+            - echo "nodeLinker: hoisted" >> pnpm-workspace.yaml
             # Only the web app and the packages it depends on (skips the API's Prisma setup).
             - pnpm install --frozen-lockfile --filter @inspectra/web...
         build:
           commands:
             - pnpm --filter @inspectra/shared build
             - pnpm --filter @inspectra/web build
-            # Amplify's packaging doesn't follow pnpm's symlinks: it needs a real copy of `next`
-            # inside the standalone app folder (the standalone output is rooted at the repo root).
-            - rm -rf .next/standalone/apps/web/node_modules/next
-            - mkdir -p .next/standalone/apps/web/node_modules
-            - cp -rL "$(dirname "$(node -p "require.resolve('next/package.json')")")" .next/standalone/apps/web/node_modules/next
       artifacts:
-        baseDirectory: .next
+        baseDirectory: apps/web/.next
         files:
           - '**/*'
       cache:
         paths:
-          - .next/cache/**/*
+          - apps/web/.next/cache/**/*
