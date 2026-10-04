@@ -1,4 +1,5 @@
 version: 1
+
 applications:
   - appRoot: apps/web
     frontend:
@@ -7,15 +8,18 @@ applications:
           commands:
             - nvm install 24 && nvm use 24
             - corepack enable
-            - pnpm install --frozen-lockfile --filter @inspectra/web...
+            - pnpm install --frozen-lockfile
+
         build:
           commands:
             - pnpm --filter @inspectra/shared build
             - pnpm --filter @inspectra/web build
+
       artifacts:
         baseDirectory: .next
         files:
           - '**/*'
+
       cache:
         paths:
           - .next/cache/**/*
