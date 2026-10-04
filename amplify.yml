@@ -25,7 +25,7 @@ applications:
             # inside the standalone app folder (the standalone output is rooted at the repo root).
             - rm -rf .next/standalone/apps/web/node_modules/next
             - mkdir -p .next/standalone/apps/web/node_modules
-            - cp -rL ../../node_modules/next .next/standalone/apps/web/node_modules/next
+            - cp -rL "$(dirname "$(node -p "require.resolve('next/package.json')")")" .next/standalone/apps/web/node_modules/next
       artifacts:
         baseDirectory: .next
         files:
